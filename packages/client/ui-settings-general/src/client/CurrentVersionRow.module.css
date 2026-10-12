@@ -1,7 +1,42 @@
 .row {
   padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.versionLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   line-height: 22px;
-  overflow-wrap: anywhere;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  background: var(--dsw-alias-bg-hover, rgba(77, 130, 255, 0.08));
+  color: var(--dsw-alias-label-accent, #4d82ff);
+  border: 1px solid var(--dsw-alias-border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.repoLine {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.link {
+  color: var(--dsw-alias-label-accent, #4d82ff);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
 }
