@@ -28,8 +28,6 @@ const roots: string[] = []
 const dshBuildWorkflows = [
   'build-exe-for-python-sdk.yml',
   'ci.yml',
-  'e2e.yml',
-  'release.yml',
   'release-publish.yml',
   'sandbox.yml',
 ]
@@ -145,6 +143,9 @@ describe('client build environment', () => {
     const commit = git(fixtureRoot, ['rev-parse', '--short=7', 'HEAD'])
 
     expect(repositoryVersion(fixtureRoot)).toBe('1.2.3-rc.4')
+    write(join(fixtureRoot, 'apps/cli/package.json'), JSON.stringify({ version: '1.2.3-rc.4-civilization.0.0.1' }))
+    expect(repositoryVersion(fixtureRoot)).toBe('1.2.3-rc.4-civilization.0.0.1')
+    rmSync(join(fixtureRoot, 'apps'), { recursive: true, force: true })
     expect(repositoryGitDirty(fixtureRoot)).toBe(false)
     expect(repositoryClientBuildEnvironment(fixtureRoot, {
       DSH_CLIENT_COMMIT_HASH: COMMIT_HASH,
