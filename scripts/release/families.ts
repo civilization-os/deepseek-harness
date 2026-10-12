@@ -345,7 +345,7 @@ class DshFamily extends ReleaseFamily {
   }
 
   override distTagForVersion(version: string): string | undefined {
-    if (version.includes('civilization')) return undefined
+    if (version.includes('civilization')) return 'latest'
     const separator = version.indexOf('-')
     if (separator === -1) return undefined
     const [channel] = version.slice(separator + 1).split('.')

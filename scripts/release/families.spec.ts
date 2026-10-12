@@ -103,7 +103,7 @@ describe('release families', () => {
     expect(dsh.distTagForVersion('0.0.2-alpha.1')).toBe('alpha')
     expect(dsh.distTagForVersion('0.0.2-canary.1')).toBe('canary')
     expect(dsh.distTagForVersion('0.0.2-rc.1')).toBe('next')
-    expect(dsh.distTagForVersion('0.2.0-rc.2-civilization.0.0.1')).toBeUndefined()
+    expect(dsh.distTagForVersion('0.2.0-rc.2-civilization.0.0.1')).toBe('latest')
     expect(dsh.distTagForVersion('0.0.2')).toBeUndefined()
     expect(vendor.distTagForVersion('4.0.1-alpha.1')).toBe('next')
     expect(vendor.distTagForVersion('4.0.1-canary.1')).toBe('next')

@@ -7,6 +7,10 @@ name: Release publish (dsh)
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'dsh-v*'
+      - 'v*'
 
 permissions:
   contents: read
