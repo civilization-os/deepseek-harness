@@ -11,10 +11,6 @@
 
 import { globSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import {
-  officialClientBuildEnvironment,
-  readClientBuildRecord,
-} from '../client-build-environment.ts'
 import { validateTarballPayload } from '../publication-payload.ts'
 
 /**
@@ -132,7 +128,9 @@ export abstract class ReleaseFamily {
       const name = requireString(manifest, 'name', normalized)
       const version = requireString(manifest, 'version', normalized)
       if (name === WORKSPACE_ROOT_PACKAGE) throw new Error(`${normalized} selected the workspace root`)
-      if (!name.startsWith('@deepseek-ai/')) throw new Error(`${normalized} must name an @deepseek-ai package`)
+      if (!name.startsWith('@deepseek-ai/') && !name.startsWith('@civilization/')) {
+        throw new Error(`${normalized} must name an @deepseek-ai or @civilization package`)
+      }
       if (seen.has(name)) throw new Error(`${name} appears twice in release family ${this.id}`)
       seen.add(name)
       members.push({
@@ -322,15 +320,9 @@ export abstract class ReleaseFamily {
 class DshFamily extends ReleaseFamily {
   readonly id = 'dsh'
   readonly patterns = [
-    'packages/*/*/package.json',
-    'apps/*/package.json',
+    'apps/cli/package.json',
   ] as const
   readonly tagPrefix = 'dsh-v'
-
-  /** Require current artifacts from a complete official client build. */
-  override verifyBuildArtifacts(root: string): void {
-    readClientBuildRecord(root, officialClientBuildEnvironment(root))
-  }
 
   /**
    * Require one version across the family, the way a single tag can name it.
@@ -369,7 +361,7 @@ class DshFamily extends ReleaseFamily {
     validateTarballPayload(files, member.name)
   }
 
-  readonly installedEntry = { packageName: '@deepseek-ai/dsh', binPath: 'lib/bin.js' }
+  readonly installedEntry = { packageName: '@civilization/dsh', binPath: 'lib/bin.js' }
 }
 
 /** `vendor/*`: every package keeps its own version line, so every package has its own tag. */

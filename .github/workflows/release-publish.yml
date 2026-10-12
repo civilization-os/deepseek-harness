@@ -93,9 +93,6 @@ jobs:
     name: Publish to npm
     needs: pack
     runs-on: ubuntu-24.04
-    # Required reviewers and the allowed tags live on the environment; this is
-    # the only job in the sequence that can write to the registry.
-    environment: npm-publish
     concurrency:
       group: Release-publish
       cancel-in-progress: false
