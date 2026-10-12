@@ -234,27 +234,45 @@ describe('Session file uploads', () => {
     await expect(uploading).rejects.toMatchObject({ code: 'session/not-found' })
   })
 
-  it('resolves a cold ordinary Agent and releases the resolver registration', async () => {
+  it('resolves a cold ordinary Agent, allows successor replacement on reload, and releases registration', async () => {
     const { ctx, uploads, agent, disposeAgent } = await uploadHarness()
-    await disposeAgent()
+    let disposeLiveAgent = disposeAgent
+    await disposeLiveAgent()
     const resolveAgent = vi.fn(async () => {
-      await ctx.agents.register(agent)
+      disposeLiveAgent = await ctx.agents.register(agent)
       return agent
     })
     const disposeResolver = uploads.registerAgentResolver(resolveAgent)
-    expect(() => { uploads.registerAgentResolver(resolveAgent) }).toThrow('already registered')
     await expect(uploads.uploadStream({
       sessionId: SESSION,
       data: (async function* (): AsyncIterable<Uint8Array> { yield Uint8Array.of(1) })(),
     })).resolves.toMatchObject({ file: { bytes: 1 } })
     expect(resolveAgent).toHaveBeenCalledWith(SESSION)
-    disposeResolver()
-    const replacement = vi.fn(async () => agent)
+
+    // Dispose the agent so it becomes cold again for replacement test
+    await disposeLiveAgent()
+
+    // Successor registration replaces prior resolver before old disposer executes (HMR reload lifecycle)
+    const replacement = vi.fn(async () => {
+      disposeLiveAgent = await ctx.agents.register(agent)
+      return agent
+    })
     const disposeReplacement = uploads.registerAgentResolver(replacement)
+    // Old disposer executes after replacement without unbinding the newer resolver
     disposeResolver()
-    expect(() => { uploads.registerAgentResolver(replacement) }).toThrow('already registered')
-    expect(disposeReplacement).toBeTypeOf('function')
+    await expect(uploads.uploadStream({
+      sessionId: SESSION,
+      data: (async function* (): AsyncIterable<Uint8Array> { yield Uint8Array.of(2) })(),
+    })).resolves.toMatchObject({ file: { bytes: 1 } })
+    expect(replacement).toHaveBeenCalledWith(SESSION)
+
+    // Disposing the active replacement releases the registration
     disposeReplacement()
+    await disposeLiveAgent()
+    await expect(uploads.uploadStream({
+      sessionId: SESSION,
+      data: (async function* (): AsyncIterable<Uint8Array> {})(),
+    })).rejects.toMatchObject({ code: 'session/not-found' })
   })
 
   it('rejects a cold upload when no Agent resolver is registered', async () => {
