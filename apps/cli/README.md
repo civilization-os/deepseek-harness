@@ -1,6 +1,8 @@
-# `@deepseek-ai/dsh`
+# `@civilization/dsh`
 
 English | [中文](README.zh.md)
+
+> **Unofficial Package Notice**: `@civilization/dsh` is the community distribution maintained on top of upstream `deepseek-ai/deepseek-harness`, featuring cross-platform path fixes and standalone single-package distribution. Upstream official package is `@deepseek-ai/dsh`.
 
 The `dsh` command is the sole supported Node application launcher: profiles are ordered stacks of plugin-bundle patch layers under the user's own overrides. SDK and ACP are profiles, not separate public bins. The Python runtime wheel packages this same command; the SDK defaults to `sdk`, and the minimal example selects `sdk-minimal`. [`src/args.ts`](src/args.ts) owns the command grammar, and [`src/bin.ts`](src/bin.ts) loads only the selected runner. Invalid commands, options from another mode, and fatal configuration or boot failures exit nonzero.
 

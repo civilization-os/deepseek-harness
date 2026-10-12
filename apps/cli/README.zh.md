@@ -1,6 +1,8 @@
-# `@deepseek-ai/dsh`
+# `@civilization/dsh`
 
 [English](README.md) | 中文
+
+> **非官方发布包说明**：`@civilization/dsh` 是基于上游官方 `deepseek-ai/deepseek-harness` 维护的社区独立发行版，集成了跨平台路径修复与单主包便捷分发机制。官方原版对应包名为 `@deepseek-ai/dsh`。
 
 `dsh` 是唯一受支持的 Node 应用启动器；profile 由多个插件组合包 patch 层按顺序叠加而成，其上再应用用户自己的覆盖配置。SDK 与 ACP（Agent Client Protocol）都是 profile，而不是独立的公开可执行命令。Python 运行时 wheel 包中也包含同一个命令；SDK 默认使用 `sdk`，极简示例选择 `sdk-minimal`。[`src/args.ts`](src/args.ts) 负责命令语法，[`src/bin.ts`](src/bin.ts) 只加载选中的运行器。无效命令、来自其他模式的选项，以及致命的配置或启动错误都会以非零状态退出。
 
