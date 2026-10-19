@@ -237,7 +237,7 @@ export function GitBody(props: GitBodyProps): ReactElement {
         <button
           type="button"
           className={`${css.tabItem} ${activeTab === 'changes' ? css.active : ''}`}
-          onClick={() => setActiveTab('changes')}
+          onClick={() => { setActiveTab('changes') }}
         >
           {t('tabs.changes')}
           {totalChanges > 0 && <span className={css.tabCount}>{totalChanges}</span>}
@@ -245,7 +245,7 @@ export function GitBody(props: GitBodyProps): ReactElement {
         <button
           type="button"
           className={`${css.tabItem} ${activeTab === 'history' ? css.active : ''}`}
-          onClick={() => setActiveTab('history')}
+          onClick={() => { setActiveTab('history') }}
         >
           {t('tabs.history')}
           {commits.length > 0 && <span className={css.tabCount}>{commits.length}</span>}

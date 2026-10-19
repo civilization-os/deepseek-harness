@@ -48,7 +48,7 @@ export function registerGitTool(ctx: Context, resolveDir: (sessionId?: string) =
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
       },
       async execute(args, exec): Promise<Record<string, JsonValue>> {
-        const cwd = resolveDir(exec.agent?.session?.id)
+        const cwd = resolveDir(exec.agent?.session.id)
         const action = args.action ?? 'status'
 
         switch (action) {

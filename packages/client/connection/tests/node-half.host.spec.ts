@@ -482,6 +482,29 @@ describe('connection node half', () => {
     expect(routes).toHaveLength(0)
   })
 
+  it('allows child plugins with only connection inject to register RPC channels', async () => {
+    const ctx = new Context()
+    const routes: WebRoute[] = []
+    provideBrowserCredentials(ctx)
+    ctx.provide('webServer', fakeHttpServer(routes, []) as WebServer)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+
+    const subPlugin = ctx.plugin({
+      inject: ['connection'],
+      apply(subCtx: Context) {
+        subCtx.connection.rpc.handle('/sub', async () => ({ ok: true, value: { sub: true } }))
+      },
+    })
+    await subPlugin.await()
+    const route = routes.find(candidate => candidate.path === '/sub')
+    expect(route).toBeDefined()
+
+    await subPlugin.dispose()
+    expect(routes.find(candidate => candidate.path === '/sub')).toBeUndefined()
+    await fiber.dispose()
+  })
+
   it('dispatches claimed /api endpoints and withdraws the claim', async () => {
     const ctx = new Context()
     const routes: WebRoute[] = []

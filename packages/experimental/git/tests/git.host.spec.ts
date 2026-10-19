@@ -107,14 +107,15 @@ describe('git host plugin', () => {
     await git('commit', '-m', 'docs: init readme')
 
     const ctx = new Context()
-    let interceptorHandler: ((endpoint: string, payload: unknown, signal: AbortSignal, peer: unknown) => Promise<unknown>) | undefined
+    let rpcHandler: ((endpoint: string, payload: unknown, signal: AbortSignal, peer: unknown) => Promise<unknown>) | undefined
 
     // Mock connection service
     ctx.provide('connection')
     ctx.connection = {
       rpc: {
-        intercept: (_channel: string, _matcher: unknown, handler: typeof interceptorHandler) => {
-          interceptorHandler = handler
+        handle: (channel: string, handler: typeof rpcHandler) => {
+          expect(channel).toBe('/git')
+          rpcHandler = handler
           return async () => {}
         },
       },
@@ -125,16 +126,16 @@ describe('git host plugin', () => {
     ctx.sandboxPolicy = { workspaceRoot: repo } as never
 
     GitPlugin.apply(ctx)
-    expect(interceptorHandler).toBeDefined()
+    expect(rpcHandler).toBeDefined()
 
     // Test RPC status
-    const statusResult = (await interceptorHandler!('git/status', {}, new AbortController().signal, {})) as { ok: boolean; value: { isRepo: boolean; branch: string } }
+    const statusResult = (await rpcHandler!('status', {}, new AbortController().signal, {})) as { ok: boolean; value: { isRepo: boolean; branch: string } }
     expect(statusResult.ok).toBe(true)
     expect(statusResult.value.isRepo).toBe(true)
     expect(statusResult.value.branch).toBe('master')
 
     // Test RPC log
-    const logResult = (await interceptorHandler!('git/log', { maxCount: 5 }, new AbortController().signal, {})) as { ok: boolean; value: Array<{ subject: string }> }
+    const logResult = (await rpcHandler!('log', { maxCount: 5 }, new AbortController().signal, {})) as { ok: boolean; value: Array<{ subject: string }> }
     expect(logResult.ok).toBe(true)
     expect(logResult.value.length).toBe(1)
     expect(logResult.value[0]?.subject).toBe('docs: init readme')

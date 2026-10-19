@@ -74,19 +74,19 @@ export function apply(ctx: ClientContext): void {
   const actions: GitInjected = {
     getStatus: async (sessionId) => {
       const conn = getConnection()
-      const res = await conn.rpc.call('/api', 'git/status', { sessionId })
+      const res = await conn.rpc.call('/git', 'status', { sessionId })
       if (!res.ok) throw new Error(res.error.message)
       return res.value as GitStatusSummary
     },
     getLog: async (sessionId, maxCount) => {
       const conn = getConnection()
-      const res = await conn.rpc.call('/api', 'git/log', { sessionId, maxCount })
+      const res = await conn.rpc.call('/git', 'log', { sessionId, maxCount })
       if (!res.ok) throw new Error(res.error.message)
       return res.value as readonly GitCommitItem[]
     },
     getDiff: async (sessionId, options) => {
       const conn = getConnection()
-      const res = await conn.rpc.call('/api', 'git/diff', { sessionId, ...options })
+      const res = await conn.rpc.call('/git', 'diff', { sessionId, ...options })
       if (!res.ok) throw new Error(res.error.message)
       return res.value as GitDiffSummary
     },
