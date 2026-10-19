@@ -97,6 +97,9 @@ Examples:
   dsh tui --resume <session>                arguments after the launcher flags reach the app
   dsh web --help                            the web app's own flags and help
   dsh plugin --profile tui add <package>    install a plugin into the tui profile
+
+Repository:
+  https://github.com/civilization-os/deepseek-harness (@civilization/dsh)
 `
 
 /**
@@ -151,9 +154,9 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
   const program: Command = new Command()
   program
     .name('dsh')
-    .version(version, '-V, --version', 'output the version number')
+    .version(`${version} (@civilization/dsh)`, '-V, --version', 'output the version number')
     .usage('[--profile] <name> [options] [app-args...]\n       dsh plugin --profile <name> <pnpm-args...>')
-    .description('dsh: boot a DeepSeek Harness profile — an ordered stack of plugin-bundle patch layers under your own overrides.')
+    .description('dsh: boot a DeepSeek Harness profile (@civilization/dsh) — an ordered stack of plugin-bundle patch layers under your own overrides.')
     .addHelpText('after', HELP_EXAMPLES)
     .exitOverride()
     // The launcher's flags come first and end at the first token it does not
