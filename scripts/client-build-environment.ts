@@ -68,6 +68,18 @@ export function repositoryCommitHash(root: string, environment: NodeJS.ProcessEn
  * @returns the repository's semver-compatible package version.
  */
 export function repositoryVersion(root: string): string {
+  const cliPath = resolve(root, 'apps/cli/package.json')
+  if (existsSync(cliPath)) {
+    try {
+      const cliManifest: unknown = JSON.parse(readFileSync(cliPath, 'utf8'))
+      if (isObject(cliManifest) && typeof cliManifest.version === 'string'
+        && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(cliManifest.version)) {
+        return cliManifest.version
+      }
+    } catch {
+      // fall back to root package.json
+    }
+  }
   const path = resolve(root, 'package.json')
   let manifest: unknown
   try {
