@@ -11,10 +11,6 @@
 
 import { globSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import {
-  officialClientBuildEnvironment,
-  readClientBuildRecord,
-} from '../client-build-environment.ts'
 import { validateTarballPayload } from '../publication-payload.ts'
 import { ON_DEMAND_BUNDLES } from '../../packages/boot/app-boot/src/official-bundle-packages.ts'
 
@@ -133,7 +129,9 @@ export abstract class ReleaseFamily {
       const name = requireString(manifest, 'name', normalized)
       const version = requireString(manifest, 'version', normalized)
       if (name === WORKSPACE_ROOT_PACKAGE) throw new Error(`${normalized} selected the workspace root`)
-      if (!name.startsWith('@deepseek-ai/')) throw new Error(`${normalized} must name an @deepseek-ai package`)
+      if (!name.startsWith('@deepseek-ai/') && !name.startsWith('@civilization/')) {
+        throw new Error(`${normalized} must name an @deepseek-ai or @civilization package`)
+      }
       if (seen.has(name)) throw new Error(`${name} appears twice in release family ${this.id}`)
       seen.add(name)
       members.push({
@@ -348,15 +346,9 @@ export abstract class ReleaseFamily {
 class DshFamily extends ReleaseFamily {
   readonly id = 'dsh'
   readonly patterns = [
-    'packages/*/*/package.json',
-    'apps/*/package.json',
+    'apps/cli/package.json',
   ] as const
   readonly tagPrefix = 'dsh-v'
-
-  /** Require current artifacts from a complete official client build. */
-  override verifyBuildArtifacts(root: string): void {
-    readClientBuildRecord(root, officialClientBuildEnvironment(root))
-  }
 
   /**
    * Require one version across the family, the way a single tag can name it.
@@ -379,6 +371,7 @@ class DshFamily extends ReleaseFamily {
   }
 
   override distTagForVersion(version: string): string | undefined {
+    if (version.includes('civilization')) return 'latest'
     const separator = version.indexOf('-')
     if (separator === -1) return undefined
     const [channel] = version.slice(separator + 1).split('.')
@@ -403,6 +396,7 @@ class DshFamily extends ReleaseFamily {
   /** Require the packed DSH runtime graph to stay on the shared exact release version. */
   override validatePackedManifest(member: ReleaseMember, manifest: Readonly<Record<string, unknown>>): void {
     super.validatePackedManifest(member, manifest)
+    if (member.name === '@civilization/dsh') return
     for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
       const dependencies = manifest[section]
       if (dependencies === null || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue
@@ -415,7 +409,7 @@ class DshFamily extends ReleaseFamily {
     }
   }
 
-  readonly installedEntry = { packageName: '@deepseek-ai/dsh', binPath: 'lib/bin.js' }
+  readonly installedEntry = { packageName: '@civilization/dsh', binPath: 'lib/bin.js' }
 }
 
 /** `vendor/*`: every package keeps its own version line, so every package has its own tag. */

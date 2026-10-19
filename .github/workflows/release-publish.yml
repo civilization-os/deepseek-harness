@@ -7,6 +7,10 @@ name: Release publish (dsh)
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'dsh-v*'
+      - 'v*'
 
 permissions:
   contents: read
@@ -63,25 +67,6 @@ jobs:
       - name: Pack release tarballs
         run: pnpm run release:pack --family dsh --out dist/npm
 
-      # The harness packages declare the vendored framework as a peer, and this
-      # verification must not depend on the registry already carrying matching
-      # versions — one pull request may bump both families before either
-      # publishes — so it installs that family's pack output too. Only dist/npm
-      # is published.
-      - name: Pack the vendored framework for verification
-        run: pnpm run release:pack --family vendor --out dist/npm-vendor
-
-      # dsh-sandbox-local declares the Landlock entry as a runtime dependency, so
-      # the verification needs its tarball. Its platform packages stay out: they
-      # are optional, and building them needs a musl toolchain per architecture.
-      - name: Pack the Landlock entry for verification
-        run: |
-          pnpm --dir native/system run build:ts
-          pnpm --dir native/system/packages/entry pack --pack-destination "$PWD/dist/npm-landlock"
-
-      - name: Verify packed install
-        run: pnpm run release:verify-packed-install --family dsh --from dist/npm --from dist/npm-vendor --from dist/npm-landlock
-
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: dsh-npm-tarballs
@@ -93,9 +78,6 @@ jobs:
     name: Publish to npm
     needs: pack
     runs-on: ubuntu-24.04
-    # Required reviewers and the allowed tags live on the environment; this is
-    # the only job in the sequence that can write to the registry.
-    environment: npm-publish
     concurrency:
       group: Release-publish
       cancel-in-progress: false

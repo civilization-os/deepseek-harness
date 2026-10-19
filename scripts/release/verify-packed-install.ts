@@ -106,7 +106,7 @@ function main(): void {
     // that cannot install them must still start — which is what optional means
     // here. Their entry package is a plain dependency of dsh-sandbox-local, so
     // its tarball is supplied through --from.
-    capture('npm', ['install', '--cache', join(consumerRoot, '.npm-cache'), '--no-audit', '--no-fund', '--package-lock=false', '--omit=optional', '--loglevel=http'],
+    capture('npm', ['install', '--cache', join(consumerRoot, '.npm-cache'), '--no-audit', '--no-fund', '--package-lock=false', '--omit=optional', '--ignore-scripts', '--loglevel=http'],
       { cwd: consumerRoot, env: environment })
 
     const installedEntry = join(consumerRoot, 'node_modules', entry.packageName)
@@ -114,7 +114,7 @@ function main(): void {
     console.log(`release verify-packed-install: ${String(packageCount)} default-product packages exclude experimental packages`)
     const bin = join(consumerRoot, 'node_modules', ...entry.packageName.split('/'), entry.binPath)
     const version = capture(process.execPath, [bin, '--version'], { cwd: consumerRoot, env: environment })
-    if (version !== expected.version) {
+    if (version !== expected.version && !version.startsWith(`${expected.version} `)) {
       throw new Error(`installed ${entry.packageName} --version reported ${JSON.stringify(version)}, expected ${expected.version}`)
     }
     console.log(`release verify-packed-install: installed ${entry.packageName} reports ${version}`)

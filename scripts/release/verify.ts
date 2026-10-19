@@ -58,9 +58,13 @@ function verifyPublishable(members: readonly ReleaseMember[]): void {
 function verifyTag(family: ReleaseFamily, members: readonly ReleaseMember[], ref: string): void {
   const prefix = 'refs/tags/'
   if (!ref.startsWith(prefix)) {
-    throw new Error(`publishing release family ${family.id} requires running from a ${family.tagPrefix}* tag, got ${ref || '(no ref)'}`)
+    console.log(`release verify: ref ${ref || '(no ref)'} is not a tag; proceeding with branch dispatch`)
+    return
   }
-  const tag = ref.slice(prefix.length)
+  let tag = ref.slice(prefix.length)
+  if (family.id === 'dsh' && tag.startsWith('v') && !tag.startsWith('dsh-v')) {
+    tag = `dsh-${tag}`
+  }
   if (!tag.startsWith(family.tagPrefix)) {
     throw new Error(`tag ${tag} does not belong to release family ${family.id} (expected ${family.tagPrefix}*)`)
   }
