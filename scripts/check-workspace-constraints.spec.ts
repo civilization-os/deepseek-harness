@@ -280,6 +280,10 @@ describe('dsh family version coherence', () => {
   it('leaves other sequences to their own version lines', () => {
     expect(checkDshFamilyVersion({ name: '@deepseek-ai/cordis', version: '4.0.1' }, '0.1.2-rc.1')).toBeUndefined()
     expect(checkDshFamilyVersion(
+      { name: '@civilization/dsh', version: '0.2.1-rc.2-civilization.0.0.1' },
+      '0.2.1-rc.2',
+    )).toBeUndefined()
+    expect(checkDshFamilyVersion(
       { name: '@deepseek-ai/node-addon-system', version: '0.1.1' },
       '0.1.2-rc.1',
     )).toBeUndefined()
@@ -399,7 +403,7 @@ it('publishes CLI runtime declarations and rejects a payload that omits them', (
   const manifest = JSON.parse(readFileSync(new URL('../apps/cli/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest })).toEqual([])
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest: { ...manifest, files: ['lib/*.js'] } }))
-    .toEqual([expect.stringContaining('@deepseek-ai/dsh: package.json files must be ["lib/*.js","lib/types/*.d.ts"]')])
+    .toEqual([expect.stringContaining('@civilization/dsh: package.json files must be ["lib/*.js","lib/types/*.d.ts"]')])
 })
 
 it('requires the shared Web injection entry in the published payload', () => {

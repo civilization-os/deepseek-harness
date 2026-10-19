@@ -6,6 +6,7 @@ settings:
 
 overrides:
   extract-zip>yauzl: 3.4.0
+  micromark-util-types: 2.0.2
   '@deepseek-ai/cosmokit': link:vendor/cosmokit
   '@deepseek-ai/schemastery': link:vendor/schemastery
 
@@ -772,12 +773,12 @@ importers:
 
   apps/desktop-host:
     dependencies:
+      '@civilization/dsh':
+        specifier: workspace:*
+        version: link:../cli
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../vendor/cordis
-      '@deepseek-ai/dsh':
-        specifier: workspace:*
-        version: link:../cli
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../packages/core/agent
@@ -4815,7 +4816,7 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
       micromark-util-types:
-        specifier: ^2.0.2
+        specifier: 2.0.2
         version: 2.0.2
       react:
         specifier: ^18.2.0
@@ -11985,7 +11986,7 @@ importers:
 
   packages/sdk/client:
     dependencies:
-      '@deepseek-ai/dsh':
+      '@civilization/dsh':
         specifier: workspace:*
         version: link:../../../apps/cli
     devDependencies:
@@ -15481,6 +15482,9 @@ importers:
 
   python/sdk-runtime:
     dependencies:
+      '@civilization/dsh':
+        specifier: workspace:*
+        version: link:../../apps/cli
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../vendor/cordis
@@ -15499,9 +15503,6 @@ importers:
       '@deepseek-ai/cosmokit':
         specifier: link:../../vendor/cosmokit
         version: link:../../vendor/cosmokit
-      '@deepseek-ai/dsh':
-        specifier: workspace:*
-        version: link:../../apps/cli
       '@deepseek-ai/dsh-acp':
         specifier: workspace:*
         version: link:../../packages/acp/acp

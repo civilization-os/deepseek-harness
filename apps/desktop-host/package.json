@@ -14,7 +14,7 @@
     "koffi": "3.1.1",
     "@deepseek-ai/libreoffice-kit": "^0.1.5",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh": "workspace:*",
+    "@civilization/dsh": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",

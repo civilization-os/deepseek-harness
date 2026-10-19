@@ -30,7 +30,7 @@ const CORDIS = '@deepseek-ai/cordis'
  */
 const ROOT_TYPE_PACKAGES: ReadonlySet<string> = new Set(['@types/react', '@types/react-dom'])
 function workspaceRange(name: string): 'workspace:*' | 'workspace:~' {
-  return name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-') ? 'workspace:*' : 'workspace:~'
+  return name === '@deepseek-ai/dsh' || name === '@civilization/dsh' || name.startsWith('@deepseek-ai/dsh-') ? 'workspace:*' : 'workspace:~'
 }
 const RELEASE_MANIFEST_GLOB = 'packages/!(experimental)/*/package.json'
 /** Every package group, experimental included, follows the same published dependency policy. */
