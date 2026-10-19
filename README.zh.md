@@ -5,9 +5,9 @@
 > **非官方仓库维护说明**：本项目为 **DeepSeek Harness 的非官方社区维护分支（Unofficial Community Fork）**，由 [Civilization](https://github.com/civilization-os) 组织维护。官方上游仓库为 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（版权归 DeepSeek-AI 所有）。
 
 - **本分支仓库**：[civilization-os/deepseek-harness](https://github.com/civilization-os/deepseek-harness)。
-- **基线对齐**：完全同步对齐上游官方最新发布版本 **`0.2.0-rc.2`**（Git Tag: `dsh-v0.2.0-rc.2`）。
+- **基线对齐**：完全同步对齐上游官方最新发布版本 **`0.2.1-rc.2`**（Git Tag: `dsh-v0.2.1-rc.2`）。
 - **独立发布包**：为避免与官方发布包冲突，本分支使用独立的 npm 主包 **[`@civilization/dsh`](https://www.npmjs.com/package/@civilization/dsh)** 进行分发。
-- **版本规则**：遵循 `0.2.0-rc.2-civilization.x.y.z` 规则，紧密跟随官方主版本号的同时，顺延递增本分支的专属发布版本。
+- **版本规则**：遵循 `0.2.1-rc.2-civilization.x.y.z` 规则，紧密跟随官方主版本号的同时，顺延递增本分支的专属发布版本。
 - **主要优化与修复**：
   - **文件上传路径修复**：修复了在 Windows 与跨平台环境下，拖拽或上传附件时因路径规范化处理导致的解析异常问题（参考 PR / Issue #1）。
   - **单主包极简发布机制**：重构并精简了发布与安装流程，用户仅需全局安装 `@civilization/dsh` 主包即可开箱使用完整的 CLI 与 Web 界面。

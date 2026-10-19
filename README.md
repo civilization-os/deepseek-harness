@@ -5,9 +5,9 @@ English | [中文](README.zh.md)
 > **Unofficial Repository Maintenance Statement**: This repository is an **unofficial community fork of DeepSeek Harness**, maintained by the [Civilization](https://github.com/civilization-os) organization. Official upstream repository is [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (Copyright (c) DeepSeek-AI).
 
 - **Fork Repository**: [civilization-os/deepseek-harness](https://github.com/civilization-os/deepseek-harness).
-- **Baseline Version**: Fully aligned and synchronized with official upstream release **`0.2.0-rc.2`** (Git Tag: `dsh-v0.2.0-rc.2`).
+- **Baseline Version**: Fully aligned and synchronized with official upstream release **`0.2.1-rc.2`** (Git Tag: `dsh-v0.2.1-rc.2`).
 - **Published npm Package**: Distributed under the standalone package **[`@civilization/dsh`](https://www.npmjs.com/package/@civilization/dsh)** to avoid name collisions with official releases.
-- **Versioning Convention**: Follows `0.2.0-rc.2-civilization.x.y.z`, maintaining full compatibility with upstream while sequencing independent patches.
+- **Versioning Convention**: Follows `0.2.1-rc.2-civilization.x.y.z`, maintaining full compatibility with upstream while sequencing independent patches.
 - **Key Improvements**:
   - **File Upload Path Normalization**: Resolved path normalization issues on Windows and cross-platform environments causing file upload failures (PR / Issue #1).
   - **Simplified Single-Package Release**: Streamlined publishing pipeline where installing `@civilization/dsh` provides the full CLI and Web runtime directly.
