@@ -866,3 +866,407 @@
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* --- IntelliJ / GitHub Workstation Table & Columnar Grid Styles --- */
+
+.treeFilterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.treeSearchInput {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.treeSearchInput:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.mainlineToggleGroup {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  flex-shrink: 0;
+}
+
+.mainlineToggleBtn {
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-xs, 3px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mainlineToggleBtnActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+/* Two-column Workstation Layout */
+.workstationLayout {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tablePane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Columnar Grid Table Header */
+.treeTableHeader {
+  display: grid;
+  grid-template-columns: var(--git-graph-col-width, 48px) minmax(200px, 1fr) 115px 90px 72px;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.colHeaderTitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Columnar Grid Table Row */
+.treeRowGrid {
+  display: grid;
+  grid-template-columns: var(--git-graph-col-width, 48px) minmax(200px, 1fr) 115px 90px 72px;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-bottom: 0.5px solid color-mix(in srgb, var(--dsw-alias-border-l2) 40%, transparent);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  user-select: none;
+}
+
+.treeRowGrid:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeRowGridSelected {
+  background: var(--dsw-alias-interactive-bg-active) !important;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.subjectCol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Conventional Commits Type Badges */
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: var(--dsw-radius-xs, 3px);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+
+.typeFeat {
+  background: color-mix(in srgb, #2ea043 16%, transparent);
+  color: #2ea043;
+  border: 0.5px solid color-mix(in srgb, #2ea043 40%, transparent);
+}
+
+.typeFix {
+  background: color-mix(in srgb, #f85149 16%, transparent);
+  color: #f85149;
+  border: 0.5px solid color-mix(in srgb, #f85149 40%, transparent);
+}
+
+.typeStyle, .typeRefactor {
+  background: color-mix(in srgb, #8250df 16%, transparent);
+  color: #8250df;
+  border: 0.5px solid color-mix(in srgb, #8250df 40%, transparent);
+}
+
+.typeRelease {
+  background: color-mix(in srgb, #388bfd 16%, transparent);
+  color: #388bfd;
+  border: 0.5px solid color-mix(in srgb, #388bfd 40%, transparent);
+}
+
+.typeMerge {
+  background: color-mix(in srgb, #6f42c1 16%, transparent);
+  color: #6f42c1;
+  border: 0.5px solid color-mix(in srgb, #6f42c1 40%, transparent);
+}
+
+.typeTest {
+  background: color-mix(in srgb, #d29922 16%, transparent);
+  color: #d29922;
+  border: 0.5px solid color-mix(in srgb, #d29922 40%, transparent);
+}
+
+.typeDocs {
+  background: color-mix(in srgb, #39c5bb 16%, transparent);
+  color: #39c5bb;
+  border: 0.5px solid color-mix(in srgb, #39c5bb 40%, transparent);
+}
+
+.typeChore, .typeRevert {
+  background: color-mix(in srgb, var(--dsw-alias-label-secondary) 14%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-secondary) 30%, transparent);
+}
+
+/* Author Column & Avatar */
+.authorCol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.authorAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.authorNameText {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Time & Hash Column */
+.timeCol {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shaCol {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+/* Details Panel (Commit Details Board) */
+.detailsPane {
+  display: flex;
+  flex-direction: column;
+  width: 330px;
+  flex-shrink: 0;
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.detailsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary);
+  letter-spacing: 0.5px;
+}
+
+.detailsContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.detailsSubject {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.detailsBody {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detailsSectionTitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dsw-alias-label-tertiary);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.detailsMetaGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.detailsMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detailsMetaLabel {
+  color: var(--dsw-alias-label-tertiary);
+  flex-shrink: 0;
+}
+
+.detailsMetaVal {
+  color: var(--dsw-alias-label-primary);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsParentLink {
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+  font-family: monospace;
+}
+
+.detailsParentLink:hover {
+  text-decoration: underline;
+}
+
+.detailsBottomActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Bottom Status Footer */
+.treeStatusFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 2%, transparent);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.footerSyncStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.syncDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.footerStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loadMoreLink {
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.loadMoreLink:hover {
+  text-decoration: underline;
+}
+
+@container (max-width: 680px) {
+  .workstationLayout {
+    flex-direction: column;
+  }
+  .tablePane {
+    flex: 1 1 auto;
+    min-height: 160px;
+  }
+  .detailsPane {
+    width: 100% !important;
+    max-height: 340px;
+    flex-shrink: 0;
+    border-left: none !important;
+    border-top: 0.5px solid var(--dsw-alias-border-l2);
+  }
+}

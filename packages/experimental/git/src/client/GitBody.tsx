@@ -15,8 +15,26 @@ import type {
   GitStatusSummary,
   GitTagItem,
 } from '../types.ts'
+import { formatFullDate, getAuthorAvatar, parseConventionalCommit } from './git-helpers.ts'
 import type {} from './locales.ts'
 import css from './GitBody.module.css'
+
+function getTypeBadgeClass(type?: string): string {
+  switch (type) {
+    case 'feat': return css.typeFeat ?? ''
+    case 'fix': return css.typeFix ?? ''
+    case 'style': return css.typeStyle ?? ''
+    case 'refactor': return css.typeRefactor ?? ''
+    case 'release': return css.typeRelease ?? ''
+    case 'merge': return css.typeMerge ?? ''
+    case 'test': return css.typeTest ?? ''
+    case 'docs': return css.typeDocs ?? ''
+    case 'revert': return css.typeRevert ?? ''
+    case 'chore':
+    default:
+      return css.typeChore ?? ''
+  }
+}
 
 
 /** Injected Git RPC methods */
@@ -242,6 +260,10 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
   // Locate in DAG Tree State
   const [highlightedCommitHash, setHighlightedCommitHash] = useState<string | null>(null)
   const [locatedNotice, setLocatedNotice] = useState<string | null>(null)
+
+  // Tree Filter & Search State
+  const [treeSearch, setTreeSearch] = useState('')
+  const [filterMode, setFilterMode] = useState<'all' | 'mainline'>('all')
 
   // Branch Filter State
   const [branchFilter, setBranchFilter] = useState('')
@@ -479,6 +501,40 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
       || item.author.toLowerCase().includes(q),
     )
   }, [tags, tagFilter])
+
+  // Filtered commits for tree tab
+  const filteredCommits = useMemo(() => {
+    let list = commits
+    if (filterMode === 'mainline') {
+      list = list.filter(c => (c.lane ?? 0) === 0)
+    }
+    const q = treeSearch.trim().toLowerCase()
+    if (q) {
+      list = list.filter(c =>
+        c.subject.toLowerCase().includes(q)
+        || c.hash.toLowerCase().includes(q)
+        || c.shortHash.toLowerCase().includes(q)
+        || c.author.toLowerCase().includes(q)
+        || (c.refs && c.refs.some(r => r.toLowerCase().includes(q))),
+      )
+    }
+    return list
+  }, [commits, filterMode, treeSearch])
+
+  // Load more commits
+  const handleLoadMore = useCallback(async () => {
+    setLoading(true)
+    try {
+      const nextCount = commits.length + 50
+      const more = await getLog(sessionId, nextCount)
+      setCommits(more)
+    } finally {
+      setLoading(false)
+    }
+  }, [commits.length, getLog, sessionId])
+
+  // Dynamic graph column width based on max DAG lane
+  const graphColWidth = useMemo(() => Math.max(48, (maxLane + 1) * 16 + 8), [maxLane])
 
   if (!status || !status.isRepo) {
     return (
@@ -830,164 +886,398 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
           </>
         )}
 
-        {/* TAB 2: DAG Topology Tree & Log */}
+        {/* TAB 2: DAG Topology Tree & Log (Workstation Grade) */}
         {activeTab === 'tree' && (
-          <>
-            <div className={css.treeContainer}>
-              {commits.map((c) => {
-                const isSelected = selectedCommitHash === c.hash
-                const isHighlighted = highlightedCommitHash === c.hash
-                const hasTag = c.refs?.some(r => r.startsWith('tag: ') || r.includes('tag:'))
-                return (
-                  <div
-                    key={c.hash}
-                    id={`git-commit-${c.hash}`}
-                    className={`${css.treeRow} ${isSelected ? css.treeRowSelected : ''} ${isHighlighted ? css.treeRowHighlighted : ''}`}
-                    onClick={() => { void handleSelectCommit(c.hash) }}
-                  >
-                    {/* DAG SVG Track Rails */}
-                    <CommitGraphCell
-                      commit={c}
-                      maxLane={maxLane}
-                      isHighlighted={isHighlighted}
-                      hasTag={Boolean(hasTag)}
-                    />
-
-                    {/* Commit Content */}
-                    <div className={css.treeBody}>
-                      {c.refs?.map((ref, idx) => {
-                        let refClass = css.refBranch
-                        let refText = ref
-                        if (ref.startsWith('tag: ')) {
-                          refClass = css.refTag
-                          refText = `🏷️ ${ref.slice(5)}`
-                        } else if (ref.includes('HEAD')) {
-                          refClass = css.refHead
-                        } else if (ref.startsWith('origin/')) {
-                          refClass = css.refRemote
-                        }
-                        return (
-                          <span key={idx} className={`${css.refBadge} ${refClass}`} title={ref}>
-                            {refText}
-                          </span>
-                        )
-                      })}
-                      <span className={css.treeSubject} title={c.subject}>
-                        {c.subject}
-                      </span>
-                      <span className={css.treeAuthor} title={c.author}>
-                        {c.author}
-                      </span>
-                      <span className={css.treeTime}>
-                        {c.relativeDate}
-                      </span>
-                      <span className={css.treeHash} title={c.hash}>
-                        {c.shortHash}
-                      </span>
-
-                      {/* Row Hover Actions */}
-                      <div className={css.treeRowActions} onClick={(e) => { e.stopPropagation() }}>
-                        <button
-                          type="button"
-                          className={css.treeActionBtn}
-                          title="复制完整 SHA"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(c.hash)
-                          }}
-                        >
-                          SHA
-                        </button>
-                        <button
-                          type="button"
-                          className={css.treeActionBtn}
-                          title="在此提交新建 Tag"
-                          onClick={() => {
-                            setNewTagCommit(c.shortHash)
-                            setCreatingTag(true)
-                            setActiveTab('tags')
-                          }}
-                        >
-                          🏷️
-                        </button>
-                        <button
-                          type="button"
-                          className={css.treeActionBtn}
-                          title="在此提交新建分支"
-                          onClick={() => {
-                            setCreatingBranch(true)
-                            setActiveTab('branches')
-                          }}
-                        >
-                          ⑂
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+          }}>
+            {/* Top Filter and Mainline Toggle Bar */}
+            <div className={css.treeFilterRow}>
+              <input
+                className={css.treeSearchInput}
+                placeholder={t('tree.searchPlaceholder')}
+                value={treeSearch}
+                onChange={(e) => { setTreeSearch(e.target.value) }}
+              />
+              <div className={css.mainlineToggleGroup}>
+                <button
+                  type="button"
+                  className={`${css.mainlineToggleBtn} ${filterMode === 'all' ? css.mainlineToggleBtnActive : ''}`}
+                  onClick={() => { setFilterMode('all') }}
+                >
+                  {t('tree.filterAll')}
+                </button>
+                <button
+                  type="button"
+                  className={`${css.mainlineToggleBtn} ${filterMode === 'mainline' ? css.mainlineToggleBtnActive : ''}`}
+                  onClick={() => { setFilterMode('mainline') }}
+                >
+                  {t('tree.filterMainline')}
+                </button>
+              </div>
             </div>
 
-            {/* Commit Detail & Changed Files Panel */}
-            {commitDetail && (
-              <div className={css.commitDetailPanel}>
-                <div className={css.detailHeader}>
-                  <div className={css.detailSubject}>{commitDetail.commit.subject}</div>
-                  <div className={css.detailMetaRow}>
-                    <span>作者: {commitDetail.commit.author} ({commitDetail.commit.authorEmail})</span>
-                    <span>{commitDetail.commit.relativeDate}</span>
-                  </div>
-                  <div className={css.detailMetaRow}>
-                    <span style={{ fontFamily: 'monospace' }}>SHA: {commitDetail.commit.hash}</span>
-                    <span className={css.numstat}>
-                      <span className={css.addStat}>+{commitDetail.totalAdditions}</span>
-                      <span className={css.delStat}>-{commitDetail.totalDeletions}</span>
-                    </span>
-                  </div>
+            {/* Main Workstation Layout: Table on left, Details on right */}
+            <div
+              className={css.workstationLayout}
+              style={{ '--git-graph-col-width': `${graphColWidth}px` } as Record<string, string>}
+            >
+              <div className={css.tablePane}>
+                {/* Columnar Grid Table Header */}
+                <div className={css.treeTableHeader}>
+                  <span className={css.colHeaderTitle}>{t('tree.colGraph')}</span>
+                  <span className={css.colHeaderTitle}>{t('tree.colSubject')}</span>
+                  <span className={css.colHeaderTitle}>{t('tree.colAuthor')}</span>
+                  <span className={css.colHeaderTitle}>{t('tree.colTime')}</span>
+                  <span className={css.colHeaderTitle}>{t('tree.colSha')}</span>
                 </div>
 
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>
-                  变更文件 ({commitDetail.files.length})
-                </div>
+                {/* Rows List */}
+                <div className={css.treeContainer}>
+                  {filteredCommits.map((c) => {
+                    const isSelected = selectedCommitHash === c.hash
+                    const isHighlighted = highlightedCommitHash === c.hash
+                    const hasTag = c.refs?.some(r => r.startsWith('tag: ') || r.includes('tag:'))
+                    const parsed = parseConventionalCommit(c.subject)
+                    const avatar = getAuthorAvatar(c.author)
 
-                <div className={css.detailFilesList}>
-                  {commitDetail.files.map(f => (
-                    <div
-                      key={f.path}
-                      className={css.detailFileItem}
-                      onClick={() => { void handleViewDiff(f.path, false, commitDetail.commit.hash) }}
-                    >
-                      <div className={css.fileLeft}>
-                        <span className={`${css.statusBadge} ${f.status === 'added' ? css.statusA : f.status === 'deleted' ? css.statusD : css.statusM}`}>
-                          {f.status[0]?.toUpperCase() ?? 'M'}
+                    return (
+                      <div
+                        key={c.hash}
+                        id={`git-commit-${c.hash}`}
+                        className={[
+                          css.treeRowGrid,
+                          isSelected ? css.treeRowGridSelected : '',
+                          isHighlighted ? css.treeRowHighlighted : '',
+                        ].filter(Boolean).join(' ')}
+                        onClick={() => { void handleSelectCommit(c.hash) }}
+                      >
+                        {/* Col 1: DAG SVG Track Rails */}
+                        <CommitGraphCell
+                          commit={c}
+                          maxLane={maxLane}
+                          isHighlighted={isHighlighted}
+                          hasTag={Boolean(hasTag)}
+                        />
+
+                        {/* Col 2: Subject & Ref Badges & Conventional Commits */}
+                        <div className={css.subjectCol}>
+                          {c.refs?.map((ref, idx) => {
+                            let refClass = css.refBranch
+                            let refText = ref
+                            if (ref.startsWith('tag: ')) {
+                              refClass = css.refTag
+                              refText = `🏷️ ${ref.slice(5)}`
+                            } else if (ref.includes('HEAD')) {
+                              refClass = css.refHead
+                            } else if (ref.startsWith('origin/')) {
+                              refClass = css.refRemote
+                            }
+                            return (
+                              <span key={idx} className={`${css.refBadge} ${refClass}`} title={ref}>
+                                {refText}
+                              </span>
+                            )
+                          })}
+                          {parsed.type && (
+                            <span className={`${css.typeBadge} ${getTypeBadgeClass(parsed.type)}`}>
+                              {parsed.type}
+                            </span>
+                          )}
+                          <span className={css.treeSubject} title={c.subject}>
+                            {c.subject}
+                          </span>
+
+                          {/* Hover Actions */}
+                          <div className={css.treeRowActions} onClick={(e) => { e.stopPropagation() }}>
+                            <button
+                              type="button"
+                              className={css.treeActionBtn}
+                              title="复制完整 SHA"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(c.hash)
+                              }}
+                            >
+                              SHA
+                            </button>
+                            <button
+                              type="button"
+                              className={css.treeActionBtn}
+                              title="在此提交新建 Tag"
+                              onClick={() => {
+                                setNewTagCommit(c.shortHash)
+                                setCreatingTag(true)
+                                setActiveTab('tags')
+                              }}
+                            >
+                              🏷️
+                            </button>
+                            <button
+                              type="button"
+                              className={css.treeActionBtn}
+                              title="在此提交新建分支"
+                              onClick={() => {
+                                setCreatingBranch(true)
+                                setActiveTab('branches')
+                              }}
+                            >
+                              ⑂
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Col 3: Author with avatar initial */}
+                        <div className={css.authorCol} title={c.author}>
+                          <span className={css.authorAvatar} style={{ background: avatar.color }}>
+                            {avatar.initial}
+                          </span>
+                          <span className={css.authorNameText}>{c.author}</span>
+                        </div>
+
+                        {/* Col 4: Time */}
+                        <span className={css.timeCol} title={c.date}>
+                          {c.relativeDate}
                         </span>
-                        <span className={css.fileName}>{f.path}</span>
-                      </div>
-                      <span className={css.numstat}>
-                        <span className={css.addStat}>+{f.additions}</span>
-                        <span className={css.delStat}>-{f.deletions}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
 
-                {selectedFileDiff && (
-                  <div style={{ marginTop: '6px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600 }}>文件差异: {selectedFileDiff.path}</span>
+                        {/* Col 5: Commit Short Hash */}
+                        <span className={css.shaCol} title={c.hash}>
+                          {c.shortHash}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Right Details Panel: Commit Details & Changed Files (Matching Reference Image) */}
+              {commitDetail && (
+                <div className={css.detailsPane}>
+                  <div className={css.detailsHeader}>
+                    <span>{t('detail.title')}</span>
+                    <button
+                      type="button"
+                      className={css.iconButton}
+                      title="关闭详情"
+                      onClick={() => {
+                        setSelectedCommitHash(null)
+                        setCommitDetail(null)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className={css.detailsContent}>
+                    {/* Commit Subject Title */}
+                    <div className={css.detailsSubject}>
+                      {commitDetail.commit.subject}
+                    </div>
+
+                    {/* Commit Body Description */}
+                    {commitDetail.body && (
+                      <div className={css.detailsBody}>
+                        {commitDetail.body}
+                      </div>
+                    )}
+
+                    {/* References */}
+                    {commitDetail.commit.refs && commitDetail.commit.refs.length > 0 && (
+                      <div>
+                        <div className={css.detailsSectionTitle}>{t('detail.references')}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {commitDetail.commit.refs.map((ref, idx) => {
+                            let refClass = css.refBranch
+                            let refText = ref
+                            if (ref.startsWith('tag: ')) {
+                              refClass = css.refTag
+                              refText = `🏷️ ${ref.slice(5)}`
+                            } else if (ref.includes('HEAD')) {
+                              refClass = css.refHead
+                            } else if (ref.startsWith('origin/')) {
+                              refClass = css.refRemote
+                            }
+                            return (
+                              <span key={idx} className={`${css.refBadge} ${refClass}`}>
+                                {refText}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Meta Properties Grid */}
+                    <div className={css.detailsMetaGrid}>
+                      <div className={css.detailsMetaRow}>
+                        <span className={css.detailsMetaLabel}>{t('detail.author')}</span>
+                        <span className={css.authorCol} style={{ maxWidth: '180px' }}>
+                          {(() => {
+                            const av = getAuthorAvatar(commitDetail.commit.author)
+                            return (
+                              <>
+                                <span className={css.authorAvatar} style={{ background: av.color }}>
+                                  {av.initial}
+                                </span>
+                                <span className={css.authorNameText}>
+                                  {commitDetail.commit.author}
+                                </span>
+                              </>
+                            )
+                          })()}
+                        </span>
+                      </div>
+                      <div className={css.detailsMetaRow}>
+                        <span className={css.detailsMetaLabel}>{t('detail.date')}</span>
+                        <span className={css.detailsMetaVal}>
+                          {formatFullDate(commitDetail.commit.date)}
+                        </span>
+                      </div>
+                      <div className={css.detailsMetaRow}>
+                        <span className={css.detailsMetaLabel}>Commit SHA</span>
+                        <span
+                          className={css.tagShaPill}
+                          title="点击复制完整 SHA"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(commitDetail.commit.hash)
+                          }}
+                        >
+                          {commitDetail.commit.hash.slice(0, 13)}
+                        </span>
+                      </div>
+                      {commitDetail.parents && commitDetail.parents.length > 0 && (
+                        <div className={css.detailsMetaRow}>
+                          <span className={css.detailsMetaLabel}>{t('detail.parent')}</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {commitDetail.parents.map(p => (
+                              <span
+                                key={p}
+                                className={css.detailsParentLink}
+                                title={`定位到父提交: ${p}`}
+                                onClick={() => { void handleLocateCommit(p) }}
+                              >
+                                {p.slice(0, 10)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Changed Files */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600 }}>
+                          变更文件 ({commitDetail.files.length} 个文件)
+                        </span>
+                        <span className={css.numstat}>
+                          <span className={css.addStat}>+{commitDetail.totalAdditions}</span>
+                          <span className={css.delStat}>-{commitDetail.totalDeletions}</span>
+                        </span>
+                      </div>
+                      <div className={css.detailFilesList}>
+                        {commitDetail.files.map(f => (
+                          <div
+                            key={f.path}
+                            className={css.detailFileItem}
+                            onClick={() => { void handleViewDiff(f.path, false, commitDetail.commit.hash) }}
+                          >
+                            <div className={css.fileLeft}>
+                              <span
+                                className={`${css.statusBadge} ${
+                                  f.status === 'added' ? css.statusA : f.status === 'deleted' ? css.statusD : css.statusM
+                                }`}
+                              >
+                                {f.status[0]?.toUpperCase() ?? 'M'}
+                              </span>
+                              <span className={css.fileName}>{f.path}</span>
+                            </div>
+                            <span className={css.numstat}>
+                              <span className={css.addStat}>+{f.additions}</span>
+                              <span className={css.delStat}>-{f.deletions}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Diff Preview if selected file */}
+                    {selectedFileDiff && (
+                      <div style={{ marginTop: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 600 }}>差异: {selectedFileDiff.path}</span>
+                          <button
+                            type="button"
+                            className={css.actionTextBtn}
+                            onClick={() => { setSelectedFileDiff(null) }}
+                          >
+                            关闭
+                          </button>
+                        </div>
+                        <DiffViewer diffText={selectedFileDiff.diff} />
+                      </div>
+                    )}
+
+                    {/* Bottom Actions */}
+                    <div className={css.detailsBottomActions}>
                       <button
                         type="button"
                         className={css.actionTextBtn}
-                        onClick={() => { setSelectedFileDiff(null) }}
+                        style={{ flex: 1, padding: '5px' }}
+                        onClick={() => {
+                          void handleCheckoutBranch(commitDetail.commit.shortHash)
+                        }}
                       >
-                        关闭
+                        {t('detail.checkout')}
+                      </button>
+                      <button
+                        type="button"
+                        className={css.commitBtn}
+                        style={{ flex: 1, padding: '5px' }}
+                        onClick={() => {
+                          setNewTagCommit(commitDetail.commit.shortHash)
+                          setCreatingTag(true)
+                          setActiveTab('tags')
+                        }}
+                      >
+                        {t('detail.createBranchOrTag')}
                       </button>
                     </div>
-                    <DiffViewer diffText={selectedFileDiff.diff} />
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Status Footer (Sync Status & Commit Stats) */}
+            <div className={css.treeStatusFooter}>
+              <div className={css.footerSyncStatus}>
+                <span className={css.syncDot} />
+                <span>
+                  {status.ahead === 0 && status.behind === 0
+                    ? t('footer.syncNormal')
+                    : status.ahead > 0
+                      ? t('footer.ahead', { count: status.ahead })
+                      : t('footer.behind', { count: status.behind })}
+                </span>
+              </div>
+              <div className={css.footerStats}>
+                <span>
+                  {t('footer.showingCount', {
+                    count: filteredCommits.length,
+                    total: status.totalCommitsCount ?? commits.length,
+                  })}
+                </span>
+                {status.totalCommitsCount && commits.length < status.totalCommitsCount && (
+                  <span className={css.loadMoreLink} onClick={() => { void handleLoadMore() }}>
+                    {t('footer.loadMore')}
+                  </span>
                 )}
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
 
         {/* TAB 3: Branches */}

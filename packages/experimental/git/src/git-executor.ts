@@ -251,6 +251,13 @@ export async function getGitStatus(cwd: string): Promise<GitStatusSummary> {
     }
   }
 
+  let totalCommitsCount: number | undefined
+  const countRaw = await runGit(cwd, ['rev-list', '--count', 'HEAD'])
+  if (countRaw) {
+    const parsed = Number.parseInt(countRaw.trim(), 10)
+    if (!Number.isNaN(parsed)) totalCommitsCount = parsed
+  }
+
   return {
     isRepo: true,
     ...rootPath !== undefined ? { rootPath } : {},
@@ -259,6 +266,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatusSummary> {
     ahead,
     behind,
     ...headCommit !== undefined ? { headCommit } : {},
+    ...totalCommitsCount !== undefined ? { totalCommitsCount } : {},
     staged,
     unstaged,
     untracked,
@@ -524,11 +532,11 @@ export async function getGitCommitDetails(cwd: string, commitHash: string): Prom
   const isRepo = await checkIsGitRepo(cwd)
   if (!isRepo) return undefined
 
-  // 1. Get commit header metadata
+  // 1. Get commit header metadata and body
   const headRaw = await runGit(cwd, [
     'show',
     '--no-patch',
-    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ar%x1f%ad%x1f%s%x1f%P%x1f%D',
+    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ar%x1f%ad%x1f%s%x1f%P%x1f%D%x1f%b',
     commitHash,
   ])
   if (!headRaw) return undefined
@@ -542,6 +550,8 @@ export async function getGitCommitDetails(cwd: string, commitHash: string): Prom
   const parents = parentStr.trim() ? parentStr.trim().split(/\s+/) : []
   const refStr = parts[8] ?? ''
   const refs = parseCommitRefs(refStr)
+  const rawBody = (parts[9] ?? '').trim()
+  const body = rawBody.length > 0 ? rawBody : undefined
 
   const commit: GitCommitItem = {
     hash: parts[0],
@@ -551,6 +561,7 @@ export async function getGitCommitDetails(cwd: string, commitHash: string): Prom
     relativeDate: parts[4],
     date: parts[5],
     subject: parts[6],
+    ...body !== undefined ? { body } : {},
     parents,
     refs,
   }
@@ -619,7 +630,14 @@ export async function getGitCommitDetails(cwd: string, commitHash: string): Prom
     }
   }
 
-  return { commit, files, totalAdditions, totalDeletions }
+  return {
+    commit,
+    ...body !== undefined ? { body } : {},
+    ...parents.length > 0 ? { parents } : {},
+    files,
+    totalAdditions,
+    totalDeletions,
+  }
 }
 
 /**
@@ -912,7 +930,10 @@ export async function getGitTags(cwd: string): Promise<readonly GitTagItem[]> {
     'for-each-ref',
     '--sort=-creatordate',
     'refs/tags',
-    '--format=%(refname:short)\t%(objectname)\t%(*objectname)\t%(creatordate:iso)\t%(creatordate:relative)\t%(contents:subject)\t%(taggername)\t%(authorname)',
+    '--format=' +
+      '%(refname:short)\t%(objectname)\t%(*objectname)\t' +
+      '%(creatordate:iso)\t%(creatordate:relative)\t%(contents:subject)\t' +
+      '%(taggername)\t%(authorname)',
   ])
   if (!raw) return []
 

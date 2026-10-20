@@ -60,6 +60,8 @@ export interface GitStatusSummary {
   readonly untracked: readonly GitFileStatus[]
   /** Total count of all changed/untracked files */
   readonly totalChanges: number
+  /** Total count of commits in the current repository */
+  readonly totalCommitsCount?: number
 }
 
 /** One commit log entry with optional DAG topology metadata */
@@ -78,6 +80,8 @@ export interface GitCommitItem {
   readonly date: string
   /** Commit subject/first line of commit message */
   readonly subject: string
+  /** Full multiline commit body message (excluding subject) */
+  readonly body?: string
   /** Parent commit hashes */
   readonly parents?: readonly string[]
   /** Git branch / tag reference names */
@@ -105,6 +109,8 @@ export interface GitGraphLanePath {
 /** Detail information for a single commit including changed files */
 export interface GitCommitDetail {
   readonly commit: GitCommitItem
+  readonly body?: string
+  readonly parents?: readonly string[]
   readonly files: readonly {
     readonly path: string
     readonly oldPath?: string
@@ -114,6 +120,12 @@ export interface GitCommitDetail {
   }[]
   readonly totalAdditions: number
   readonly totalDeletions: number
+}
+
+/** Complete log query summary including commits and total count */
+export interface GitLogSummary {
+  readonly commits: readonly GitCommitItem[]
+  readonly totalCount: number
 }
 
 /** One Git tag entry */
