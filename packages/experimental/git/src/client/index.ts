@@ -16,6 +16,7 @@ import type {
   GitCommitItem,
   GitDiffSummary,
   GitStatusSummary,
+  GitTagItem,
 } from '../types.ts'
 import { GIT_ID, gitDefinition } from './definition.tsx'
 import { GitBody, type GitInjected } from './GitBody.tsx'
@@ -151,6 +152,24 @@ export function apply(ctx: ClientContext): void {
     push: async (sessionId) => {
       const conn = getConnection()
       const res = await conn.rpc.call('/git', 'push', { sessionId })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    getTags: async (sessionId) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'tags', { sessionId })
+      if (!res.ok) throw new Error(res.error.message)
+      return res.value as readonly GitTagItem[]
+    },
+    createTag: async (sessionId, name, commit, message) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'createTag', { sessionId, name, commit, message })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    deleteTag: async (sessionId, name) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'deleteTag', { sessionId, name })
       if (!res.ok) return { success: false, message: res.error.message }
       return res.value as { success: boolean; message?: string }
     },

@@ -61,8 +61,8 @@ export const GitBranchPill = memo(function GitBranchPill({
         getStatus(sessionId),
         getBranches(sessionId),
       ])
-      if (statusRes) setStatus(statusRes)
-      if (branchRes) setBranches(branchRes)
+      setStatus(statusRes)
+      setBranches(branchRes)
     } catch {
       // safe fallback on communication errors
     }
@@ -223,13 +223,28 @@ export const GitBranchPill = memo(function GitBranchPill({
                 <span>新建分支</span>
               </button>
               <div className={css.toolBtnGroup}>
-                <button type="button" className={css.toolBtn} title="拉取 (Pull)" onClick={handlePull}>
+                <button
+                  type="button"
+                  className={css.toolBtn}
+                  title="拉取 (Pull)"
+                  onClick={() => { void handlePull() }}
+                >
                   Pull
                 </button>
-                <button type="button" className={css.toolBtn} title="推送 (Push)" onClick={handlePush}>
+                <button
+                  type="button"
+                  className={css.toolBtn}
+                  title="推送 (Push)"
+                  onClick={() => { void handlePush() }}
+                >
                   Push
                 </button>
-                <button type="button" className={css.toolBtn} title="刷新状态" onClick={refresh}>
+                <button
+                  type="button"
+                  className={css.toolBtn}
+                  title="刷新状态"
+                  onClick={() => { void refresh() }}
+                >
                   <IconRefreshOutlineRegular className={css.btnIcon} />
                 </button>
               </div>

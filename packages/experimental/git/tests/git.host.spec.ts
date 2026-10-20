@@ -11,6 +11,9 @@ import {
   getGitDiff,
   getGitLog,
   getGitStatus,
+  getGitTags,
+  gitCreateTag,
+  gitDeleteTag,
 } from '../src/git-executor.ts'
 import * as GitPlugin from '../src/index.ts'
 
@@ -89,6 +92,19 @@ describe('git-executor', () => {
     // Branches
     const branches = await getGitBranches(repo)
     expect(branches.some(b => b.name === 'main' && b.isCurrent)).toBe(true)
+
+    // Tags
+    const tagRes = await gitCreateTag(repo, 'v0.1.0', undefined, 'first release')
+    expect(tagRes.success).toBe(true)
+    const tags = await getGitTags(repo)
+    expect(tags.length).toBe(1)
+    expect(tags[0]?.name).toBe('v0.1.0')
+    expect(tags[0]?.isAnnotated).toBe(true)
+    expect(tags[0]?.message).toBe('first release')
+
+    const delRes = await gitDeleteTag(repo, 'v0.1.0')
+    expect(delRes.success).toBe(true)
+    expect((await getGitTags(repo)).length).toBe(0)
   })
 })
 
@@ -159,6 +175,32 @@ describe('git host plugin', () => {
       value: { branch: string }
     }
     expect(branchStatus.value.branch).toBe('feat/test-branch')
+
+    // Test RPC createTag
+    const createTagRes = (await rpcHandler!(
+      'createTag',
+      { name: 'v1.0.0', message: 'prod release' },
+      new AbortController().signal,
+      {},
+    )) as { ok: boolean; value: { success: boolean } }
+    expect(createTagRes.ok).toBe(true)
+    expect(createTagRes.value.success).toBe(true)
+
+    // Test RPC tags query
+    const tagsRes = (await rpcHandler!('tags', {}, new AbortController().signal, {})) as {
+      ok: boolean
+      value: Array<{ name: string; message: string }>
+    }
+    expect(tagsRes.ok).toBe(true)
+    expect(tagsRes.value.some(t => t.name === 'v1.0.0')).toBe(true)
+
+    // Test RPC deleteTag
+    const delTagRes = (await rpcHandler!('deleteTag', { name: 'v1.0.0' }, new AbortController().signal, {})) as {
+      ok: boolean
+      value: { success: boolean }
+    }
+    expect(delTagRes.ok).toBe(true)
+    expect(delTagRes.value.success).toBe(true)
 
     await ctx.fiber.dispose()
   })

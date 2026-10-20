@@ -14,8 +14,11 @@ import {
   getGitDiff,
   getGitLog,
   getGitStatus,
+  getGitTags,
   gitCheckout,
   gitCommit,
+  gitCreateTag,
+  gitDeleteTag,
   gitDiscard,
   gitFetch,
   gitPull,
@@ -150,6 +153,25 @@ export function apply(ctx: Context): void {
 
         if (endpoint === 'push') {
           const result = await gitPush(cwd)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'tags') {
+          const tags = await getGitTags(cwd)
+          return { ok: true, value: tags }
+        }
+
+        if (endpoint === 'createTag') {
+          const name = typeof body.name === 'string' ? body.name : ''
+          const commit = typeof body.commit === 'string' ? body.commit : undefined
+          const message = typeof body.message === 'string' ? body.message : undefined
+          const result = await gitCreateTag(cwd, name, commit, message)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'deleteTag') {
+          const name = typeof body.name === 'string' ? body.name : ''
+          const result = await gitDeleteTag(cwd, name)
           return { ok: true, value: result }
         }
 

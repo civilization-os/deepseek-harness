@@ -12,6 +12,7 @@ import type {
   GitGraphLanePath,
   GitOperationResult,
   GitStatusSummary,
+  GitTagItem,
 } from './types.ts'
 
 const execFileAsync = promisify(execFile)
@@ -288,6 +289,7 @@ function parseCommitRefs(refStr: string): string[] {
 
 /**
  * Compute DAG topology lanes and vector paths for commits (IntelliJ IDEA style graph).
+ * Implements mainline pinning (trunk commits firmly anchored to lane 0) and smooth lane allocations.
  * @param rawCommits - Chronological descending commits with parents.
  * @returns Commits augmented with lane indices, lane colors, and connecting paths.
  */
@@ -308,14 +310,28 @@ function buildDagTopology(rawCommits: {
   for (const item of rawCommits) {
     // 1. Locate current commit lane
     let lane = activeLanes.indexOf(item.hash)
+
     if (lane === -1) {
-      // Find first empty slot or append
-      const emptySlot = activeLanes.indexOf(null)
-      if (emptySlot !== -1) {
-        lane = emptySlot
+      if (activeLanes.length === 0 || activeLanes[0] === null) {
+        // Mainline trunk slot (lane 0) is available
+        lane = 0
+        if (activeLanes.length === 0) activeLanes.push(null)
+        else activeLanes[0] = null
       } else {
-        lane = activeLanes.length
-        activeLanes.push(null)
+        // Find first empty slot starting at lane 1, preserving lane 0 for mainline trunk
+        let emptySlot = -1
+        for (let l = 1; l < activeLanes.length; l++) {
+          if (activeLanes[l] === null) {
+            emptySlot = l
+            break
+          }
+        }
+        if (emptySlot !== -1) {
+          lane = emptySlot
+        } else {
+          lane = activeLanes.length
+          activeLanes.push(null)
+        }
       }
     }
 
@@ -328,9 +344,28 @@ function buildDagTopology(rawCommits: {
     const [firstParent, ...otherParents] = item.parents
 
     if (firstParent) {
-      // First parent continues on this lane, or merges if already tracked elsewhere
       const existingParentLane = activeLanes.indexOf(firstParent)
-      if (existingParentLane !== -1) {
+      if (lane === 0) {
+        // Mainline commit: ensure first parent stays pinned on lane 0
+        if (existingParentLane !== -1 && existingParentLane !== 0) {
+          // If firstParent was tracked on another lane, pull it back to lane 0
+          activeLanes[existingParentLane] = null
+          paths.push({
+            fromLane: existingParentLane,
+            toLane: 0,
+            kind: 'merge',
+            color: laneColor,
+          })
+        }
+        activeLanes[0] = firstParent
+        paths.push({
+          fromLane: 0,
+          toLane: 0,
+          kind: 'straight',
+          color: laneColor,
+        })
+      } else if (existingParentLane !== -1) {
+        // Parent already tracked in another lane (e.g. merge back into mainline or sibling branch)
         paths.push({
           fromLane: lane,
           toLane: existingParentLane,
@@ -338,6 +373,7 @@ function buildDagTopology(rawCommits: {
           color: laneColor,
         })
       } else {
+        // Continue branch on current lane
         activeLanes[lane] = firstParent
         paths.push({
           fromLane: lane,
@@ -359,11 +395,21 @@ function buildDagTopology(rawCommits: {
           color: LANE_PALETTE[existingLane % LANE_PALETTE.length] ?? laneColor,
         })
       } else {
-        // Allocate a new lane for this merged-in branch
-        const emptySlot = activeLanes.indexOf(null)
-        const newLane = emptySlot !== -1 ? emptySlot : activeLanes.length
-        if (emptySlot !== -1) activeLanes[emptySlot] = otherParent
-        else activeLanes.push(otherParent)
+        // Allocate a new lane for this merged-in branch (avoid lane 0)
+        let emptySlot = -1
+        for (let l = 1; l < activeLanes.length; l++) {
+          if (activeLanes[l] === null) {
+            emptySlot = l
+            break
+          }
+        }
+        const newLane = emptySlot !== -1 ? emptySlot : Math.max(1, activeLanes.length)
+        if (emptySlot !== -1) {
+          activeLanes[emptySlot] = otherParent
+        } else {
+          while (activeLanes.length < newLane) activeLanes.push(null)
+          activeLanes[newLane] = otherParent
+        }
 
         const branchColor = LANE_PALETTE[newLane % LANE_PALETTE.length] ?? laneColor
         paths.push({
@@ -849,6 +895,110 @@ export async function gitPush(cwd: string): Promise<GitOperationResult> {
   return {
     success: res.ok,
     message: res.ok ? 'Pushed successfully' : res.stderr || 'Push failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Query all git tags in the repository sorted by creation date descending.
+ * @param cwd - Target directory.
+ * @returns Ordered list of Git tags with commit hashes and metadata.
+ */
+export async function getGitTags(cwd: string): Promise<readonly GitTagItem[]> {
+  const isRepo = await checkIsGitRepo(cwd)
+  if (!isRepo) return []
+
+  const raw = await runGit(cwd, [
+    'for-each-ref',
+    '--sort=-creatordate',
+    'refs/tags',
+    '--format=%(refname:short)\t%(objectname)\t%(*objectname)\t%(creatordate:iso)\t%(creatordate:relative)\t%(contents:subject)\t%(taggername)\t%(authorname)',
+  ])
+  if (!raw) return []
+
+  const tags: GitTagItem[] = []
+  const lines = raw.split(/\r?\n/)
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const parts = line.split('\t')
+    if (parts.length >= 6 && parts[0]) {
+      const name = parts[0]
+      const objectName = parts[1] ?? ''
+      const peeledHash = (parts[2] ?? '').trim()
+      const commitHash = peeledHash || objectName
+      const isAnnotated = Boolean(peeledHash)
+      const date = parts[3] ?? ''
+      const relativeDate = parts[4] ?? ''
+      const message = parts[5] ?? ''
+      const author = parts[6] || parts[7] || 'Unknown'
+
+      tags.push({
+        name,
+        commitHash,
+        shortHash: commitHash.slice(0, 7),
+        date,
+        relativeDate,
+        message,
+        author,
+        isAnnotated,
+      })
+    }
+  }
+
+  return tags
+}
+
+/**
+ * Create a new git tag at the specified commit or HEAD.
+ * @param cwd - Target directory.
+ * @param name - Tag name (e.g. 'v1.0.0').
+ * @param targetCommit - Optional commit hash (defaults to HEAD).
+ * @param message - Optional annotation message. If provided, creates an annotated tag (-a).
+ * @returns Operation result.
+ */
+export async function gitCreateTag(
+  cwd: string,
+  name: string,
+  targetCommit?: string,
+  message?: string,
+): Promise<GitOperationResult> {
+  const cleanName = name.trim()
+  if (!cleanName) return { success: false, message: 'Tag name cannot be empty' }
+
+  const args = ['tag']
+  if (message && message.trim()) {
+    args.push('-a', cleanName, '-m', message.trim())
+  } else {
+    args.push(cleanName)
+  }
+
+  if (targetCommit && targetCommit.trim()) {
+    args.push(targetCommit.trim())
+  }
+
+  const res = await runGitDetailed(cwd, args)
+  return {
+    success: res.ok,
+    message: res.ok ? `Tag '${cleanName}' created successfully` : res.stderr || 'Failed to create tag',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Delete a git tag.
+ * @param cwd - Target directory.
+ * @param name - Tag name to delete.
+ * @returns Operation result.
+ */
+export async function gitDeleteTag(cwd: string, name: string): Promise<GitOperationResult> {
+  const cleanName = name.trim()
+  if (!cleanName) return { success: false, message: 'Tag name cannot be empty' }
+
+  const res = await runGitDetailed(cwd, ['tag', '-d', cleanName])
+  return {
+    success: res.ok,
+    message: res.ok ? `Tag '${cleanName}' deleted successfully` : res.stderr || 'Failed to delete tag',
     output: res.stdout || res.stderr,
   }
 }

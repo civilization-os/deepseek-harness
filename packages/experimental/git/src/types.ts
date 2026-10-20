@@ -116,6 +116,26 @@ export interface GitCommitDetail {
   readonly totalDeletions: number
 }
 
+/** One Git tag entry */
+export interface GitTagItem {
+  /** Tag name (e.g. 'v1.0.0', 'dsh-v0.2.1-rc.2') */
+  readonly name: string
+  /** Target commit full 40-character SHA hash */
+  readonly commitHash: string
+  /** Target commit abbreviated 7-character hash */
+  readonly shortHash: string
+  /** ISO 8601 date string of tag or commit */
+  readonly date: string
+  /** Human-readable relative date (e.g. '3 days ago') */
+  readonly relativeDate: string
+  /** Tag annotation message or commit subject */
+  readonly message: string
+  /** Author or tagger name */
+  readonly author: string
+  /** Whether this is an annotated tag (git tag -a) */
+  readonly isAnnotated: boolean
+}
+
 /** Aggregated local and remote branches */
 export interface GitBranchesSummary {
   readonly current?: string

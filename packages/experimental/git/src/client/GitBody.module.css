@@ -632,3 +632,237 @@
   color: var(--dsw-alias-state-business-primary);
   font-weight: 600;
 }
+
+/* Tag ref badge in commit graph tree */
+.refTag {
+  background: color-mix(in srgb, #f0883e 18%, transparent);
+  color: #f0883e;
+  border: 0.5px solid #f0883e;
+}
+
+/* Commit row highlight and locate pulse */
+.treeRowHighlighted {
+  animation: rowGlow 2.5s ease-out forwards;
+  border-left: 2px solid var(--dsw-alias-state-business-primary);
+}
+
+@keyframes rowGlow {
+  0% {
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, transparent);
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  }
+  40% {
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 25%, transparent);
+    box-shadow: inset 0 0 8px color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+    box-shadow: none;
+  }
+}
+
+.locateGlowRing {
+  animation: pulseRing 1.5s ease-in-out infinite;
+  transform-origin: center;
+  stroke: var(--dsw-alias-state-business-primary);
+  stroke-width: 2;
+  fill: none;
+}
+
+@keyframes pulseRing {
+  0% {
+    r: 6;
+    opacity: 1;
+  }
+  50% {
+    r: 10;
+    opacity: 0.4;
+  }
+  100% {
+    r: 12;
+    opacity: 0;
+  }
+}
+
+.treeRowActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  margin-left: 4px;
+}
+
+.treeRow:hover .treeRowActions {
+  opacity: 1;
+}
+
+.treeActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 4px;
+  height: 18px;
+  border: none;
+  border-radius: var(--dsw-radius-xs, 3px);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.treeActionBtn:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* GitHub-Grade Tags Tab & Cards */
+.tagList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tagCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tagCard:hover {
+  border-color: var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.tagCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tagTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tagName {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagName:hover {
+  text-decoration: underline;
+}
+
+.tagShaPill {
+  font-family: monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-xs, 3px);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.tagShaPill:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 15%, transparent);
+  color: var(--dsw-alias-label-primary);
+}
+
+.tagAnnotatedBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f0883e 18%, transparent);
+  color: #f0883e;
+  border: 0.5px solid #f0883e;
+}
+
+.tagActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tagLocateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tagLocateBtn:hover {
+  background: var(--dsw-alias-state-business-primary);
+  color: #ffffff;
+}
+
+.tagMessage {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagMetaFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-top: 2px;
+}
+
+.tagAuthor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.tagForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tagFormTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.tagFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

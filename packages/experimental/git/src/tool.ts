@@ -11,7 +11,10 @@ import {
   getGitDiff,
   getGitLog,
   getGitStatus,
+  getGitTags,
   gitCheckout,
+  gitCreateTag,
+  gitDeleteTag,
 } from './git-executor.ts'
 
 /**
@@ -28,8 +31,8 @@ export function registerGitTool(ctx: Context, resolveDir: (sessionId?: string) =
       parameters: {
         action: {
           type: 'string',
-          enum: ['status', 'log', 'diff', 'branches', 'commit'],
-          description: 'The Git query action to perform: "status" (default, file changes and branch info), "log" (recent commits with DAG topology rails), "diff" (code changes), "branches" (local and remote branches), or "commit" (details for a specific commit).',
+          enum: ['status', 'log', 'diff', 'branches', 'commit', 'tags'],
+          description: 'The Git query action: "status" (changes and branch info), "log" (commits with DAG topology rails), "diff" (code diffs), "branches" (branch list), "commit" (commit details), or "tags" (all repository tags).',
         },
         path: {
           type: 'string',
@@ -130,6 +133,23 @@ export function registerGitTool(ctx: Context, resolveDir: (sessionId?: string) =
               })),
             }
           }
+          case 'tags': {
+            const rawTags = await getGitTags(cwd)
+            return {
+              action: 'tags',
+              total: rawTags.length,
+              tags: rawTags.map(t => ({
+                name: t.name,
+                commitHash: t.commitHash,
+                shortHash: t.shortHash,
+                date: t.date,
+                relativeDate: t.relativeDate,
+                message: t.message,
+                author: t.author,
+                isAnnotated: t.isAnnotated,
+              })),
+            }
+          }
           case 'status':
           default: {
             const status = await getGitStatus(cwd)
@@ -201,5 +221,72 @@ export function registerGitTool(ctx: Context, resolveDir: (sessionId?: string) =
         rawInput: args,
       }),
     })), 'experimental-git: register git_checkout tool')
+
+    // 3. Dedicated tool for creating or deleting git tags
+    scope.effect(() => scope.tools.register(defineTool({
+      name: 'git_tag',
+      description: 'Create or delete a Git tag in the current project repository.',
+      parameters: {
+        name: {
+          type: 'string',
+          required: true,
+          description: 'The tag name (e.g. "v1.0.0", "release-20261020").',
+        },
+        action: {
+          type: 'string',
+          enum: ['create', 'delete'],
+          description: 'Tag operation: "create" (default) or "delete".',
+        },
+        commit: {
+          type: 'string',
+          description: 'Target commit hash to place the tag on when creating (defaults to current HEAD).',
+        },
+        message: {
+          type: 'string',
+          description: 'Optional annotation message for an annotated tag (git tag -a -m).',
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+        },
+        render: (_args, val) => {
+          const value = val as { success?: boolean; name?: string; message?: string }
+          return [{
+            type: 'text',
+            text: value.message ?? (value.success ? 'Success' : 'Failed'),
+          }]
+        },
+      },
+      async execute(args, exec): Promise<Record<string, JsonValue>> {
+        const cwd = resolveDir(exec.agent?.session.id)
+        const name = args.name.trim()
+        const action = args.action ?? 'create'
+
+        if (action === 'delete') {
+          const result = await gitDeleteTag(cwd, name)
+          return {
+            success: result.success,
+            name,
+            action: 'delete',
+            message: result.message ?? '',
+          }
+        }
+
+        const result = await gitCreateTag(cwd, name, args.commit, args.message)
+        return {
+          success: result.success,
+          name,
+          action: 'create',
+          message: result.message ?? '',
+        }
+      },
+      presentCall: args => ({
+        card: 'generic',
+        title: `git_tag ${args.action ?? 'create'} ${args.name}`,
+        rawInput: args,
+      }),
+    })), 'experimental-git: register git_tag tool')
   })
 }

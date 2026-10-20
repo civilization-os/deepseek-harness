@@ -13,6 +13,7 @@ import type {
   GitCommitItem,
   GitDiffSummary,
   GitStatusSummary,
+  GitTagItem,
 } from '../types.ts'
 import type {} from './locales.ts'
 import css from './GitBody.module.css'
@@ -33,6 +34,14 @@ export interface GitInjected {
   readonly fetch: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
   readonly pull: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
   readonly push: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
+  readonly getTags: (sessionId?: string) => Promise<readonly GitTagItem[]>
+  readonly createTag: (
+    sessionId?: string,
+    name?: string,
+    commit?: string,
+    message?: string,
+  ) => Promise<{ success: boolean; message?: string }>
+  readonly deleteTag: (sessionId?: string, name?: string) => Promise<{ success: boolean; message?: string }>
 }
 
 export type GitBodyProps =
@@ -40,7 +49,7 @@ export type GitBodyProps =
   & PropsLocale<'gitView'>
   & GitInjected
 
-type ActiveTab = 'changes' | 'tree' | 'branches'
+type ActiveTab = 'changes' | 'tree' | 'branches' | 'tags'
 
 /**
  * Render color-coded unified diff lines.
@@ -72,7 +81,17 @@ function DiffViewer({ diffText }: { readonly diffText: string }): ReactElement {
 /**
  * Render SVG DAG topology graph tracks for a single commit row (IDEA style).
  */
-function CommitGraphCell({ commit, maxLane }: { commit: GitCommitItem; maxLane: number }) {
+function CommitGraphCell({
+  commit,
+  maxLane,
+  isHighlighted,
+  hasTag,
+}: {
+  commit: GitCommitItem
+  maxLane: number
+  isHighlighted: boolean
+  hasTag: boolean
+}) {
   const laneWidth = 16
   const rowHeight = 28
   const width = Math.max(24, (maxLane + 1) * laneWidth)
@@ -108,7 +127,7 @@ function CommitGraphCell({ commit, maxLane }: { commit: GitCommitItem; maxLane: 
           return (
             <path
               key={idx}
-              d={`M ${fromX} ${nodeY} C ${fromX} 24, ${toX} 18, ${toX} ${rowHeight}`}
+              d={`M ${fromX} ${nodeY} C ${fromX} 22, ${toX} 20, ${toX} ${rowHeight}`}
               stroke={p.color}
               strokeWidth={2}
               fill="none"
@@ -117,24 +136,43 @@ function CommitGraphCell({ commit, maxLane }: { commit: GitCommitItem; maxLane: 
           )
         }
 
-        if (p.kind === 'merge') {
-          return (
-            <path
-              key={idx}
-              d={`M ${fromX} 0 C ${fromX} 10, ${toX} 4, ${toX} ${nodeY}`}
-              stroke={p.color}
-              strokeWidth={2}
-              fill="none"
-              strokeLinecap="round"
-            />
-          )
-        }
-
-        return null
+        return (
+          <path
+            key={idx}
+            d={`M ${fromX} 0 C ${fromX} 8, ${toX} 6, ${toX} ${nodeY}`}
+            stroke={p.color}
+            strokeWidth={2}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )
       })}
 
-      {/* 2. Commit Node Circle */}
-      {isHead && (
+      {/* 2. Locate Pulse Glow */}
+      {isHighlighted && (
+        <circle
+          cx={nodeX}
+          cy={nodeY}
+          r={8.5}
+          className={css.locateGlowRing}
+        />
+      )}
+
+      {/* 3. Outer Tag Indicator Ring */}
+      {hasTag && (
+        <circle
+          cx={nodeX}
+          cy={nodeY}
+          r={6.5}
+          stroke="#f0883e"
+          strokeWidth={1.5}
+          fill="none"
+          opacity={0.9}
+        />
+      )}
+
+      {/* 4. Head Outer Ring */}
+      {isHead && !hasTag && (
         <circle
           cx={nodeX}
           cy={nodeY}
@@ -145,6 +183,8 @@ function CommitGraphCell({ commit, maxLane }: { commit: GitCommitItem; maxLane: 
           opacity={0.8}
         />
       )}
+
+      {/* 5. Center Commit Dot */}
       <circle
         cx={nodeX}
         cy={nodeY}
@@ -167,6 +207,9 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
     getCommitDetails,
     getDiff,
     getBranches,
+    getTags,
+    createTag,
+    deleteTag,
     checkout,
     stage,
     unstage,
@@ -183,6 +226,7 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
   const [status, setStatus] = useState<GitStatusSummary | null>(null)
   const [commits, setCommits] = useState<readonly GitCommitItem[]>([])
   const [branches, setBranches] = useState<GitBranchesSummary | null>(null)
+  const [tags, setTags] = useState<readonly GitTagItem[]>([])
 
   // Commit Console State
   const [commitMessage, setCommitMessage] = useState('')
@@ -195,27 +239,40 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
   const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null)
   const [commitDetail, setCommitDetail] = useState<GitCommitDetail | null>(null)
 
+  // Locate in DAG Tree State
+  const [highlightedCommitHash, setHighlightedCommitHash] = useState<string | null>(null)
+  const [locatedNotice, setLocatedNotice] = useState<string | null>(null)
+
   // Branch Filter State
   const [branchFilter, setBranchFilter] = useState('')
   const [newBranchName, setNewBranchName] = useState('')
   const [creatingBranch, setCreatingBranch] = useState(false)
 
+  // Tag Management State
+  const [tagFilter, setTagFilter] = useState('')
+  const [creatingTag, setCreatingTag] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagCommit, setNewTagCommit] = useState('')
+  const [newTagMessage, setNewTagMessage] = useState('')
+
   // Fetch full repository data
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [statusRes, logRes, branchRes] = await Promise.all([
+      const [statusRes, logRes, branchRes, tagRes] = await Promise.all([
         getStatus(sessionId).catch(() => null),
         getLog(sessionId, 50).catch(() => []),
         getBranches(sessionId).catch(() => null),
+        getTags(sessionId).catch(() => []),
       ])
       if (statusRes) setStatus(statusRes)
-      if (logRes) setCommits(logRes)
+      setCommits(logRes)
       if (branchRes) setBranches(branchRes)
+      setTags(tagRes)
     } finally {
       setLoading(false)
     }
-  }, [getBranches, getLog, getStatus, sessionId])
+  }, [getBranches, getLog, getStatus, getTags, sessionId])
 
   useEffect(() => {
     void refresh()
@@ -332,6 +389,71 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
     return max
   }, [commits])
 
+  // Locate commit in DAG tree and pulse glow
+  const handleLocateCommit = useCallback(async (commitHash: string, tagName?: string) => {
+    setActiveTab('tree')
+    let found = commits.find(c => c.hash.startsWith(commitHash) || commitHash.startsWith(c.hash))
+    if (!found) {
+      try {
+        const deepLogs = await getLog(sessionId, 200)
+        setCommits(deepLogs)
+        found = deepLogs.find(c => c.hash.startsWith(commitHash) || commitHash.startsWith(c.hash))
+      } catch {
+        // Continue with current list
+      }
+    }
+
+    if (found) {
+      setSelectedCommitHash(found.hash)
+      setHighlightedCommitHash(found.hash)
+      if (tagName) {
+        setLocatedNotice(t('tag.locatedNotice', { name: tagName }))
+        setTimeout(() => { setLocatedNotice(null) }, 3000)
+      }
+      void handleSelectCommit(found.hash)
+      setTimeout(() => {
+        const el = document.getElementById(`git-commit-${found.hash}`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+      setTimeout(() => {
+        setHighlightedCommitHash(null)
+      }, 3500)
+    }
+  }, [commits, getLog, handleSelectCommit, sessionId, t])
+
+  // Create Tag
+  const handleCreateTag = useCallback(async () => {
+    const name = newTagName.trim()
+    if (!name) {
+      alert('请输入标签名称')
+      return
+    }
+    const targetCommit = newTagCommit.trim() || undefined
+    const message = newTagMessage.trim() || undefined
+    const res = await createTag(sessionId, name, targetCommit, message)
+    if (res.success) {
+      setCreatingTag(false)
+      setNewTagName('')
+      setNewTagCommit('')
+      setNewTagMessage('')
+      await refresh()
+    } else {
+      alert(res.message || '创建标签失败')
+    }
+  }, [createTag, newTagCommit, newTagMessage, newTagName, refresh, sessionId])
+
+  // Delete Tag
+  const handleDeleteTag = useCallback(async (tagName: string) => {
+    if (confirm(t('tag.deleteConfirm', { name: tagName }))) {
+      const res = await deleteTag(sessionId, tagName)
+      if (res.success) {
+        await refresh()
+      } else {
+        alert(res.message || '删除标签失败')
+      }
+    }
+  }, [deleteTag, refresh, sessionId, t])
+
   // Filtered branches for branch tab
   const filteredLocalBranches = useMemo(() => {
     if (!branches?.local) return []
@@ -344,6 +466,19 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
     const q = branchFilter.trim().toLowerCase()
     return q ? branches.remote.filter(b => b.name.toLowerCase().includes(q)) : branches.remote
   }, [branches?.remote, branchFilter])
+
+  // Filtered tags for tags tab
+  const filteredTags = useMemo(() => {
+    const q = tagFilter.trim().toLowerCase()
+    if (!q) return tags
+    return tags.filter(item =>
+      item.name.toLowerCase().includes(q)
+      || item.shortHash.toLowerCase().includes(q)
+      || item.commitHash.toLowerCase().includes(q)
+      || item.message.toLowerCase().includes(q)
+      || item.author.toLowerCase().includes(q),
+    )
+  }, [tags, tagFilter])
 
   if (!status || !status.isRepo) {
     return (
@@ -418,7 +553,7 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
             type="button"
             className={`${css.iconButton} ${loading ? css.spinning : ''}`}
             title="刷新"
-            onClick={refresh}
+            onClick={() => { void refresh() }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .655-.835zm12.59-1.01a.75.75 0 0 1-.834-.656 5.5 5.5 0 0 0-9.592-2.97l1.204 1.204a.25.25 0 0 1-.177.427H1.25a.25.25 0 0 1-.25-.25V1.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-.655.835z" />
@@ -452,7 +587,32 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
         >
           {t('tabs.branches')}
         </button>
+        <button
+          type="button"
+          className={`${css.tab} ${activeTab === 'tags' ? css.tabActive : ''}`}
+          onClick={() => { setActiveTab('tags') }}
+        >
+          {t('tabs.tags')}
+          {tags.length > 0 && <span className={css.tabCount}>{tags.length}</span>}
+        </button>
       </div>
+
+      {locatedNotice && (
+        <div style={{
+          padding: '6px 12px',
+          background: 'color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent)',
+          color: 'var(--dsw-alias-state-business-primary)',
+          fontSize: '11px',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          borderBottom: '0.5px solid var(--dsw-alias-border-l2)',
+        }}>
+          <span>🎯</span>
+          <span>{locatedNotice}</span>
+        </div>
+      )}
 
       {/* 3. Main Content Panes */}
       <div className={css.content}>
@@ -676,24 +836,39 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
             <div className={css.treeContainer}>
               {commits.map((c) => {
                 const isSelected = selectedCommitHash === c.hash
+                const isHighlighted = highlightedCommitHash === c.hash
+                const hasTag = c.refs?.some(r => r.startsWith('tag: ') || r.includes('tag:'))
                 return (
                   <div
                     key={c.hash}
-                    className={`${css.treeRow} ${isSelected ? css.treeRowSelected : ''}`}
+                    id={`git-commit-${c.hash}`}
+                    className={`${css.treeRow} ${isSelected ? css.treeRowSelected : ''} ${isHighlighted ? css.treeRowHighlighted : ''}`}
                     onClick={() => { void handleSelectCommit(c.hash) }}
                   >
                     {/* DAG SVG Track Rails */}
-                    <CommitGraphCell commit={c} maxLane={maxLane} />
+                    <CommitGraphCell
+                      commit={c}
+                      maxLane={maxLane}
+                      isHighlighted={isHighlighted}
+                      hasTag={Boolean(hasTag)}
+                    />
 
                     {/* Commit Content */}
                     <div className={css.treeBody}>
                       {c.refs?.map((ref, idx) => {
                         let refClass = css.refBranch
-                        if (ref.includes('HEAD')) refClass = css.refHead
-                        else if (ref.includes('origin/')) refClass = css.refRemote
+                        let refText = ref
+                        if (ref.startsWith('tag: ')) {
+                          refClass = css.refTag
+                          refText = `🏷️ ${ref.slice(5)}`
+                        } else if (ref.includes('HEAD')) {
+                          refClass = css.refHead
+                        } else if (ref.startsWith('origin/')) {
+                          refClass = css.refRemote
+                        }
                         return (
-                          <span key={idx} className={`${css.refBadge} ${refClass}`}>
-                            {ref}
+                          <span key={idx} className={`${css.refBadge} ${refClass}`} title={ref}>
+                            {refText}
                           </span>
                         )
                       })}
@@ -709,6 +884,43 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
                       <span className={css.treeHash} title={c.hash}>
                         {c.shortHash}
                       </span>
+
+                      {/* Row Hover Actions */}
+                      <div className={css.treeRowActions} onClick={(e) => { e.stopPropagation() }}>
+                        <button
+                          type="button"
+                          className={css.treeActionBtn}
+                          title="复制完整 SHA"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(c.hash)
+                          }}
+                        >
+                          SHA
+                        </button>
+                        <button
+                          type="button"
+                          className={css.treeActionBtn}
+                          title="在此提交新建 Tag"
+                          onClick={() => {
+                            setNewTagCommit(c.shortHash)
+                            setCreatingTag(true)
+                            setActiveTab('tags')
+                          }}
+                        >
+                          🏷️
+                        </button>
+                        <button
+                          type="button"
+                          className={css.treeActionBtn}
+                          title="在此提交新建分支"
+                          onClick={() => {
+                            setCreatingBranch(true)
+                            setActiveTab('branches')
+                          }}
+                        >
+                          ⑂
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -876,6 +1088,176 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: Tags (GitHub Releases/Tags Style) */}
+        {activeTab === 'tags' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Search and New Tag bar */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                className={css.commitTextarea}
+                style={{ minHeight: '30px', height: '30px', padding: '4px 8px' }}
+                placeholder={t('tag.filter')}
+                value={tagFilter}
+                onChange={(e) => { setTagFilter(e.target.value) }}
+              />
+              <button
+                type="button"
+                className={css.actionTextBtn}
+                style={{ flexShrink: 0 }}
+                onClick={() => { setCreatingTag(prev => !prev) }}
+              >
+                + {t('tag.newPrompt')}
+              </button>
+            </div>
+
+            {/* Create Tag Form */}
+            {creatingTag && (
+              <div className={css.tagForm}>
+                <div className={css.tagFormTitle}>{t('tag.newPrompt')}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' }}>
+                    {t('tag.nameLabel')} *
+                  </label>
+                  <input
+                    autoFocus
+                    className={css.commitTextarea}
+                    style={{ minHeight: '28px', height: '28px', padding: '4px 8px' }}
+                    placeholder={t('tag.namePlaceholder')}
+                    value={newTagName}
+                    onChange={(e) => { setNewTagName(e.target.value) }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' }}>
+                    {t('tag.targetCommitLabel')}
+                  </label>
+                  <input
+                    className={css.commitTextarea}
+                    style={{ minHeight: '28px', height: '28px', padding: '4px 8px' }}
+                    placeholder="例如 687f282 或留空为 HEAD"
+                    value={newTagCommit}
+                    onChange={(e) => { setNewTagCommit(e.target.value) }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--dsw-alias-label-secondary)' }}>
+                    {t('tag.messageLabel')}
+                  </label>
+                  <input
+                    className={css.commitTextarea}
+                    style={{ minHeight: '28px', height: '28px', padding: '4px 8px' }}
+                    placeholder={t('tag.messagePrompt')}
+                    value={newTagMessage}
+                    onChange={(e) => { setNewTagMessage(e.target.value) }}
+                  />
+                </div>
+                <div className={css.tagFormActions}>
+                  <button
+                    type="button"
+                    className={css.actionTextBtn}
+                    onClick={() => { setCreatingTag(false) }}
+                  >
+                    {t('tag.cancelBtn')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.commitBtn}
+                    onClick={() => { void handleCreateTag() }}
+                  >
+                    {t('tag.createBtn')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tags Cards List */}
+            {filteredTags.length === 0 ? (
+              <div className={css.emptyState}>
+                <svg viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1 7.775V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.752 1.752 0 0 1 1 7.775zm1.5 0c0 .066.026.13.073.177l6.25 6.25a.25.25 0 0 0 .354 0l5.025-5.025a.25.25 0 0 0 0-.354l-6.25-6.25a.25.25 0 0 0-.177-.073H2.75a.25.25 0 0 0-.25.25v5.025zM6 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                </svg>
+                <div>{t('tag.empty')}</div>
+              </div>
+            ) : (
+              <div className={css.tagList}>
+                {filteredTags.map(tag => (
+                  <div key={tag.name} className={css.tagCard}>
+                    <div className={css.tagCardHeader}>
+                      <div className={css.tagTitleRow}>
+                        <span style={{ fontSize: '13px' }}>🏷️</span>
+                        <span
+                          className={css.tagName}
+                          title="点击在图谱中定位"
+                          onClick={() => { void handleLocateCommit(tag.commitHash, tag.name) }}
+                        >
+                          {tag.name}
+                        </span>
+                        <span
+                          className={css.tagShaPill}
+                          title={`Commit: ${tag.commitHash} (点击在图谱中定位)`}
+                          onClick={() => { void handleLocateCommit(tag.commitHash, tag.name) }}
+                        >
+                          {tag.shortHash}
+                        </span>
+                        {tag.isAnnotated && (
+                          <span className={css.tagAnnotatedBadge}>{t('tag.annotated')}</span>
+                        )}
+                      </div>
+                      <div className={css.tagActions}>
+                        <button
+                          type="button"
+                          className={css.tagLocateBtn}
+                          title="在图谱中定位该提交"
+                          onClick={() => { void handleLocateCommit(tag.commitHash, tag.name) }}
+                        >
+                          <span>🎯</span>
+                          <span>{t('tag.locateBtn')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={css.fileMiniBtn}
+                          title={t('tag.copyName')}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(tag.name)
+                          }}
+                        >
+                          📋
+                        </button>
+                        <button
+                          type="button"
+                          className={css.fileMiniBtn}
+                          title={t('tag.deleteBtn')}
+                          onClick={() => { void handleDeleteTag(tag.name) }}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Commit Message or Tag Annotation */}
+                    {tag.message && (
+                      <div className={css.tagMessage} title={tag.message}>
+                        {tag.message}
+                      </div>
+                    )}
+
+                    {/* Footer with author and date */}
+                    <div className={css.tagMetaFooter}>
+                      <span className={css.tagAuthor}>
+                        <span>👤</span>
+                        <span>{tag.author}</span>
+                      </span>
+                      <span title={tag.date}>
+                        {tag.relativeDate}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
