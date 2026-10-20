@@ -6,26 +6,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  IconBranchOutlineRegular,
+  IconCheckOutlineRegular,
+  IconPlusOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconSearchOutlineRegular,
+  MenuSurface,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { GitBranchesSummary, GitStatusSummary } from '../types.ts'
 import css from './GitBranchPill.module.css'
-
-/** SVG Git Branch Icon */
-function GitBranchIcon({ className }: { className?: string | undefined }) {
-  return (
-    <svg className={className ?? ''} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      <path d="M11.75 2.5a1.75 1.75 0 1 0-2.45 1.606V6.5a1.5 1.5 0 0 1-1.5 1.5H5.8A2.75 2.75 0 0 0 3.5 6.25V4.106a1.75 1.75 0 1 0-1.5 0v7.788a1.75 1.75 0 1 0 1.5 0V8.25A1.25 1.25 0 0 1 4.75 7h3a3 3 0 0 0 3-3V4.106a1.75 1.75 0 0 0 1-1.606zM2.75 3.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm0 10.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm8-10.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
-    </svg>
-  )
-}
-
-/** Checkmark icon */
-function CheckIcon({ className }: { className?: string | undefined }) {
-  return (
-    <svg className={className ?? ''} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-    </svg>
-  )
-}
 
 
 export interface GitBranchPillProps {
@@ -198,23 +188,21 @@ export const GitBranchPill = memo(function GitBranchPill({
         title={`Git Branch: ${currentBranchName}`}
         onClick={handleToggle}
       >
-        <GitBranchIcon className={css.icon} />
+        <IconBranchOutlineRegular className={css.icon} />
         <span className={css.branchName}>{currentBranchName}</span>
         {status !== null && status.ahead > 0 && <span className={`${css.badge} ${css.badgeAhead}`}>↑{status.ahead}</span>}
         {status !== null && status.behind > 0 && <span className={`${css.badge} ${css.badgeBehind}`}>↓{status.behind}</span>}
       </button>
 
       {open && popoverPos && createPortal(
-        <div
+        <MenuSurface
           ref={popoverRef}
           className={css.popover}
           style={{ bottom: `${popoverPos.bottom}px`, left: `${popoverPos.left}px` }}
         >
           <div className={css.header}>
             <div className={css.searchRow}>
-              <svg className={css.searchIcon} viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11.5 7a4.499 4.499 0 1 1-8.998 0A4.499 4.499 0 0 1 11.5 7zm-.82 4.74a6 6 0 1 0-1.06 1.06l3.04 3.04a.75.75 0 1 0 1.06-1.06l-3.04-3.04z" />
-              </svg>
+              <IconSearchOutlineRegular className={css.searchIcon} />
               <input
                 autoFocus
                 className={css.searchInput}
@@ -231,17 +219,18 @@ export const GitBranchPill = memo(function GitBranchPill({
                 title="新建分支"
                 onClick={() => { setCreatingBranch(prev => !prev) }}
               >
-                + 新建分支
+                <IconPlusOutlineRegular className={css.btnIcon} />
+                <span>新建分支</span>
               </button>
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div className={css.toolBtnGroup}>
                 <button type="button" className={css.toolBtn} title="拉取 (Pull)" onClick={handlePull}>
-                  ↓ Pull
+                  Pull
                 </button>
                 <button type="button" className={css.toolBtn} title="推送 (Push)" onClick={handlePush}>
-                  ↑ Push
+                  Push
                 </button>
                 <button type="button" className={css.toolBtn} title="刷新状态" onClick={refresh}>
-                  🔄 刷新
+                  <IconRefreshOutlineRegular className={css.btnIcon} />
                 </button>
               </div>
             </div>
@@ -274,11 +263,11 @@ export const GitBranchPill = memo(function GitBranchPill({
                 }}
               >
                 <div className={css.branchItemLeft}>
-                  <GitBranchIcon className={css.itemIcon} />
+                  <IconBranchOutlineRegular className={css.itemIcon} />
                   <span className={css.itemText}>{b.name}</span>
                 </div>
                 {b.isCurrent ? (
-                  <CheckIcon className={css.checkMark} />
+                  <IconCheckOutlineRegular className={css.checkMark} />
                 ) : (
                   b.ahead !== undefined && b.ahead > 0 && <span className={css.badge}>↑{b.ahead}</span>
                 )}
@@ -300,7 +289,7 @@ export const GitBranchPill = memo(function GitBranchPill({
                     onClick={() => { void handleCheckout(b.name) }}
                   >
                     <div className={css.branchItemLeft}>
-                      <GitBranchIcon className={css.itemIcon} />
+                      <IconBranchOutlineRegular className={css.itemIcon} />
                       <span className={css.itemText}>{b.name}</span>
                     </div>
                   </button>
@@ -312,7 +301,7 @@ export const GitBranchPill = memo(function GitBranchPill({
               <div className={css.emptyTip}>未找到匹配的分支</div>
             )}
           </div>
-        </div>,
+        </MenuSurface>,
         document.body,
       )}
     </span>

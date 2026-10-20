@@ -1,4 +1,4 @@
-/* IntelliJ IDEA-Grade Git Tool Window Styles */
+/* IntelliJ IDEA-Grade Git Tool Window Styles (unified DSH design) */
 
 .root {
   display: flex;
@@ -6,11 +6,11 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  color: var(--dsw-alias-label-primary, #ffffff);
+  color: var(--dsw-alias-label-primary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: 1.5;
   user-select: none;
-  background: var(--dsw-alias-surface-primary, transparent);
+  background: transparent;
 }
 
 /* Header & Branch Banner */
@@ -23,7 +23,7 @@
   box-sizing: border-box;
   height: 38px;
   padding: 0 10px 0 12px;
-  border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.08));
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .branchInfo {
@@ -38,9 +38,9 @@
   align-items: center;
   gap: 4px;
   padding: 2px 7px;
-  border-radius: 4px;
-  background: var(--dsw-alias-surface-inset, rgba(255, 255, 255, 0.06));
-  color: var(--dsw-alias-label-primary, #ffffff);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   font-weight: 500;
   max-width: 160px;
@@ -50,7 +50,7 @@
 }
 
 .branchIcon {
-  color: #388bfd;
+  color: var(--dsw-alias-state-business-primary);
   flex-shrink: 0;
 }
 
@@ -62,11 +62,11 @@
 }
 
 .aheadText {
-  color: #388bfd;
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .behindText {
-  color: #f0883e;
+  color: var(--dsw-alias-state-warn-primary);
 }
 
 .headerActions {
@@ -83,16 +83,16 @@
   height: 26px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(255, 255, 255, 0.7));
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
 }
 
 .iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.1));
-  color: var(--dsw-alias-label-primary, #ffffff);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .iconButton.spinning svg {
@@ -110,8 +110,8 @@
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.08));
-  background: var(--dsw-alias-surface-inset, rgba(0, 0, 0, 0.15));
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
 }
 
 .tab {
@@ -120,9 +120,9 @@
   gap: 5px;
   padding: 4px 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(255, 255, 255, 0.7));
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -130,13 +130,13 @@
 }
 
 .tab:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.06));
-  color: var(--dsw-alias-label-primary, #ffffff);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .tabActive {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.12));
-  color: var(--dsw-alias-interactive-accent, #58a6ff);
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-state-business-primary);
   font-weight: 600;
 }
 
@@ -148,7 +148,7 @@
   border-radius: 10px;
   font-size: 10px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: inherit;
 }
 
@@ -171,7 +171,7 @@
   justify-content: center;
   padding: 32px 16px;
   text-align: center;
-  color: var(--dsw-alias-label-tertiary, rgba(255, 255, 255, 0.5));
+  color: var(--dsw-alias-label-tertiary);
   gap: 8px;
 }
 
@@ -185,10 +185,10 @@
 .section {
   display: flex;
   flex-direction: column;
-  border-radius: 6px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   overflow: hidden;
-  background: var(--dsw-alias-surface-inset, rgba(0, 0, 0, 0.1));
+  background: transparent;
 }
 
 .sectionHeader {
@@ -196,10 +196,12 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-interactive-bg-hover);
   cursor: pointer;
   font-weight: 600;
   font-size: 12px;
+  color: var(--dsw-alias-label-primary);
 }
 
 .sectionTitle {
@@ -217,8 +219,8 @@
 .actionTextBtn {
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--dsw-radius-xs, 3px);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
@@ -226,7 +228,7 @@
 }
 
 .actionTextBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -240,14 +242,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 5px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
   font-size: 12px;
   cursor: pointer;
+  color: var(--dsw-alias-label-primary);
   transition: background 0.12s ease;
 }
 
 .fileItem:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .fileLeft {
@@ -270,10 +273,25 @@
   flex-shrink: 0;
 }
 
-.statusM { background: rgba(56, 139, 253, 0.2); color: #58a6ff; }
-.statusA { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
-.statusD { background: rgba(248, 81, 73, 0.2); color: #f85149; }
-.statusU { background: rgba(163, 113, 247, 0.2); color: #bc8cff; }
+.statusM {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 15%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.statusA {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 15%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.statusD {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 15%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.statusU {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 15%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+}
 
 .fileName {
   overflow: hidden;
@@ -305,15 +323,17 @@
   width: 20px;
   height: 20px;
   border: none;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  color: inherit;
+  border-radius: var(--dsw-radius-xs, 3px);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .fileMiniBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
 }
 
 /* Commit Box (IDEA Style) */
@@ -322,9 +342,9 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border-radius: 6px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.12));
-  background: var(--dsw-alias-surface-inset, rgba(0, 0, 0, 0.2));
+  border-radius: var(--dsw-radius-md);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
   margin-top: 4px;
 }
 
@@ -334,10 +354,10 @@
   min-height: 54px;
   max-height: 120px;
   padding: 6px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.1));
-  background: rgba(0, 0, 0, 0.2);
-  color: inherit;
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
   font-family: inherit;
   font-size: 12px;
   resize: vertical;
@@ -345,7 +365,7 @@
 }
 
 .commitTextarea:focus {
-  border-color: #388bfd;
+  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .commitButtonRow {
@@ -360,10 +380,10 @@
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   border: none;
-  background: #238636;
-  color: #ffffff;
+  background: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-label-primary-inverted);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -371,7 +391,7 @@
 }
 
 .commitBtn:hover {
-  background: #2ea043;
+  background: var(--dsw-alias-state-success-secondary);
 }
 
 .commitPushBtn {
@@ -379,10 +399,10 @@
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -390,7 +410,8 @@
 }
 
 .commitPushBtn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
 }
 
 /* Git DAG Topology Log & Tree */
@@ -406,20 +427,21 @@
   align-items: center;
   height: 28px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   font-size: 12px;
   cursor: pointer;
+  color: var(--dsw-alias-label-primary);
   transition: background 0.12s ease;
   user-select: none;
 }
 
 .treeRow:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .treeRowSelected {
-  background: rgba(56, 139, 253, 0.18) !important;
-  color: #ffffff;
+  background: var(--dsw-alias-interactive-bg-active) !important;
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .graphSvg {
@@ -449,21 +471,21 @@
 }
 
 .refHead {
-  background: rgba(240, 136, 62, 0.25);
-  color: #f0883e;
-  border: 1px solid rgba(240, 136, 62, 0.4);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+  border: 0.5px solid var(--dsw-alias-state-warn-primary);
 }
 
 .refBranch {
-  background: rgba(46, 160, 67, 0.25);
-  color: #3fb950;
-  border: 1px solid rgba(46, 160, 67, 0.4);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 18%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+  border: 0.5px solid var(--dsw-alias-state-success-primary);
 }
 
 .refRemote {
-  background: rgba(163, 113, 247, 0.25);
-  color: #bc8cff;
-  border: 1px solid rgba(163, 113, 247, 0.4);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 18%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  border: 0.5px solid var(--dsw-alias-state-business-primary);
 }
 
 .treeSubject {
@@ -495,9 +517,9 @@
   font-family: monospace;
   font-size: 11px;
   color: var(--dsw-alias-label-secondary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--dsw-alias-interactive-bg-hover);
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--dsw-radius-xs, 3px);
   flex-shrink: 0;
 }
 
@@ -507,26 +529,28 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--dsw-alias-border-primary, rgba(255, 255, 255, 0.18));
-  background: var(--dsw-alias-surface-overlay, #161b22);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-radius: var(--dsw-radius-lg);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-primary);
   margin-top: 8px;
 }
-
 
 .detailHeader {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   padding-bottom: 8px;
 }
 
 .detailSubject {
   font-weight: 600;
   font-size: 13px;
-  color: #ffffff;
+  color: var(--dsw-alias-label-primary);
 }
 
 .detailMetaRow {
@@ -550,14 +574,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-sm);
   font-size: 11px;
   cursor: pointer;
+  color: var(--dsw-alias-label-primary);
   transition: background 0.12s ease;
 }
 
 .detailFileItem:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .numstat {
@@ -567,8 +592,8 @@
   font-size: 10px;
 }
 
-.addStat { color: #3fb950; }
-.delStat { color: #f85149; }
+.addStat { color: var(--dsw-alias-state-success-primary); }
+.delStat { color: var(--dsw-alias-state-error-primary); }
 
 /* Diff Viewer */
 .diffViewer {
@@ -576,13 +601,14 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  border-radius: 6px;
-  background: #0d1117;
-  border: 1px solid #30363d;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-markdown-code-block);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   font-family: monospace;
   font-size: 11px;
   max-height: 260px;
   overflow: auto;
+  color: var(--dsw-alias-label-primary);
 }
 
 .diffLine {
@@ -592,17 +618,17 @@
 }
 
 .diffAdd {
-  background: rgba(46, 160, 67, 0.15);
-  color: #7ee787;
+  background: var(--dsw-alias-code-diff-added);
+  color: var(--dsw-alias-state-success-primary);
 }
 
 .diffDel {
-  background: rgba(248, 81, 73, 0.15);
-  color: #ffa198;
+  background: var(--dsw-alias-code-diff-deleted);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .diffHunk {
-  background: rgba(56, 139, 253, 0.15);
-  color: #79c0ff;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
   font-weight: 600;
 }

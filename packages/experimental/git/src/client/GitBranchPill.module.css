@@ -1,4 +1,4 @@
-/* Status bar Git branch pill and popover branch switcher */
+/* Status bar Git branch pill and popover branch switcher (unified DSH design) */
 
 .anchor {
   position: relative;
@@ -11,14 +11,14 @@
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   box-sizing: border-box;
   max-width: 100%;
   padding: 1px 8px;
   border: none;
-  border-radius: var(--dsw-radius-sm, 6px);
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
   font: inherit;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -30,15 +30,20 @@
 
 .pill:hover,
 .pill[aria-expanded='true'] {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-label-primary, #ffffff);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 
 .icon {
   width: 14px;
   height: 14px;
   flex: none;
-  color: var(--dsw-alias-interactive-accent, #388bfd);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pill:hover .icon,
+.pill[aria-expanded='true'] .icon {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .branchName {
@@ -52,39 +57,40 @@
   display: inline-flex;
   align-items: center;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-xs, 3px);
   font-size: 11px;
   line-height: 14px;
-  font-weight: 600;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.1));
+  font-weight: 500;
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
 }
 
 .badgeAhead {
-  color: #388bfd;
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .badgeBehind {
-  color: #f0883e;
+  color: var(--dsw-alias-state-warn-primary);
 }
 
-/* Branch switch popover panel */
+/* Branch switch popover panel (wrapped in MenuSurface) */
 .popover {
   position: fixed;
-  z-index: 9999;
-  width: 320px;
+  z-index: 1100;
+  width: 310px;
   max-height: 440px;
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.12));
-  background: var(--dsw-alias-surface-overlay, #1c2128);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
-  color: var(--dsw-alias-label-primary, #ffffff);
-  font-family: inherit;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
+  line-height: 18px;
   overflow: hidden;
-  backdrop-filter: blur(12px);
+  cursor: default;
   animation: popoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -100,12 +106,11 @@
 }
 
 .header {
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.08));
+  padding: 8px 10px 6px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.15);
+  gap: 6px;
 }
 
 .searchRow {
@@ -113,9 +118,9 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--dsw-alias-surface-inset, rgba(0, 0, 0, 0.25));
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .searchIcon {
@@ -129,7 +134,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  color: inherit;
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   outline: none;
 }
@@ -145,48 +150,64 @@
   gap: 4px;
 }
 
+.toolBtnGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .toolBtn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  border: 1px solid var(--dsw-alias-border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: 4px;
-  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   font-family: inherit;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .toolBtn:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.1));
+  background: var(--dsw-alias-interactive-bg-active);
   color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-primary, rgba(255, 255, 255, 0.2));
+}
+
+.btnIcon {
+  width: 12px;
+  height: 12px;
+  flex: none;
 }
 
 .newBranchBox {
   display: flex;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .newBranchInput {
   flex: 1;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--dsw-alias-interactive-accent, #388bfd);
-  background: var(--dsw-alias-surface-inset, rgba(0, 0, 0, 0.3));
-  color: inherit;
+  padding: 4px 8px;
+  border-radius: var(--dsw-radius-sm);
+  border: 0.5px solid var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   outline: none;
+}
+
+.newBranchInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .branchList {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 4px;
+  padding: 4px;
 }
 
 .groupLabel {
@@ -195,9 +216,7 @@
   gap: 6px;
   padding: 6px 8px 3px;
   font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -206,30 +225,31 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 6px 8px;
-  border-radius: 4px;
+  padding: 5px 8px;
+  border-radius: var(--dsw-radius-sm);
   border: none;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
 .branchItem:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
 .currentBranch {
-  background: rgba(56, 139, 253, 0.15);
-  color: #58a6ff;
-  font-weight: 600;
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
 }
 
 .currentBranch:hover {
-  background: rgba(56, 139, 253, 0.22);
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .branchItemLeft {
@@ -244,7 +264,11 @@
   width: 13px;
   height: 13px;
   flex: none;
-  opacity: 0.8;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.currentBranch .itemIcon {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .itemText {
@@ -254,9 +278,9 @@
 }
 
 .checkMark {
-  width: 13px;
-  height: 13px;
-  color: #388bfd;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-state-business-primary);
   flex: none;
 }
 
