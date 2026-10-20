@@ -416,10 +416,11 @@
 
 /* Git DAG Topology Log & Tree */
 .treeContainer {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 1px;
+  gap: 0;
 }
 
 .treeRow {
@@ -448,6 +449,14 @@
   flex-shrink: 0;
   height: 28px;
   margin-right: 6px;
+}
+
+.graphOverlaySvg {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .treeBody {
@@ -971,12 +980,14 @@
 
 /* Columnar Grid Table Row */
 .treeRowGrid {
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: var(--git-graph-col-width, 48px) minmax(200px, 1fr) 115px 90px 72px;
   align-items: center;
   gap: 8px;
   min-height: 28px;
   height: 28px;
+  max-height: 28px;
   padding: 0 10px;
   border-bottom: 0.5px solid color-mix(in srgb, var(--dsw-alias-border-l2) 40%, transparent);
   color: var(--dsw-alias-label-primary);

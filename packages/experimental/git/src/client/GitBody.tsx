@@ -15,7 +15,12 @@ import type {
   GitStatusSummary,
   GitTagItem,
 } from '../types.ts'
-import { formatFullDate, getAuthorAvatar, parseConventionalCommit } from './git-helpers.ts'
+import {
+  computeDagGraph,
+  formatFullDate,
+  getAuthorAvatar,
+  parseConventionalCommit,
+} from './git-helpers.ts'
 import type {} from './locales.ts'
 import css from './GitBody.module.css'
 
@@ -96,122 +101,6 @@ function DiffViewer({ diffText }: { readonly diffText: string }): ReactElement {
   )
 }
 
-/**
- * Render SVG DAG topology graph tracks for a single commit row (IDEA style).
- */
-function CommitGraphCell({
-  commit,
-  maxLane,
-  isHighlighted,
-  hasTag,
-}: {
-  commit: GitCommitItem
-  maxLane: number
-  isHighlighted: boolean
-  hasTag: boolean
-}) {
-  const laneWidth = 16
-  const rowHeight = 28
-  const width = Math.max(24, (maxLane + 1) * laneWidth)
-  const myLane = commit.lane ?? 0
-  const nodeX = myLane * laneWidth + 8
-  const nodeY = rowHeight / 2
-  const color = commit.laneColor ?? '#388bfd'
-  const isHead = commit.refs?.some(r => r.includes('HEAD') || r.includes('master') || r.includes('main'))
-
-  return (
-    <svg className={css.graphSvg} width={width} height={rowHeight}>
-      {/* 1. Connecting rails */}
-      {commit.paths?.map((p, idx) => {
-        const fromX = p.fromLane * laneWidth + 8
-        const toX = p.toLane * laneWidth + 8
-
-        if (p.kind === 'straight') {
-          return (
-            <line
-              key={idx}
-              x1={fromX}
-              y1={0}
-              x2={toX}
-              y2={rowHeight}
-              stroke={p.color}
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          )
-        }
-
-        if (p.kind === 'fork') {
-          return (
-            <path
-              key={idx}
-              d={`M ${fromX} ${nodeY} C ${fromX} 22, ${toX} 20, ${toX} ${rowHeight}`}
-              stroke={p.color}
-              strokeWidth={2}
-              fill="none"
-              strokeLinecap="round"
-            />
-          )
-        }
-
-        return (
-          <path
-            key={idx}
-            d={`M ${fromX} 0 C ${fromX} 8, ${toX} 6, ${toX} ${nodeY}`}
-            stroke={p.color}
-            strokeWidth={2}
-            fill="none"
-            strokeLinecap="round"
-          />
-        )
-      })}
-
-      {/* 2. Locate Pulse Glow */}
-      {isHighlighted && (
-        <circle
-          cx={nodeX}
-          cy={nodeY}
-          r={8.5}
-          className={css.locateGlowRing}
-        />
-      )}
-
-      {/* 3. Outer Tag Indicator Ring */}
-      {hasTag && (
-        <circle
-          cx={nodeX}
-          cy={nodeY}
-          r={6.5}
-          stroke="#f0883e"
-          strokeWidth={1.5}
-          fill="none"
-          opacity={0.9}
-        />
-      )}
-
-      {/* 4. Head Outer Ring */}
-      {isHead && !hasTag && (
-        <circle
-          cx={nodeX}
-          cy={nodeY}
-          r={6.5}
-          stroke={color}
-          strokeWidth={1.5}
-          fill="none"
-          opacity={0.8}
-        />
-      )}
-
-      {/* 5. Center Commit Dot */}
-      <circle
-        cx={nodeX}
-        cy={nodeY}
-        r={4}
-        fill={color}
-      />
-    </svg>
-  )
-}
 
 /**
  * Main Git Body Component.
@@ -396,20 +285,6 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
     }
   }, [checkout, refresh, sessionId])
 
-  // Compute maximum DAG lane for graph width
-  const maxLane = useMemo(() => {
-    let max = 0
-    for (const c of commits) {
-      if (c.lane !== undefined && c.lane > max) max = c.lane
-      if (c.paths) {
-        for (const p of c.paths) {
-          if (p.fromLane > max) max = p.fromLane
-          if (p.toLane > max) max = p.toLane
-        }
-      }
-    }
-    return max
-  }, [commits])
 
   // Locate commit in DAG tree and pulse glow
   const handleLocateCommit = useCallback(async (commitHash: string, tagName?: string) => {
@@ -533,8 +408,9 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
     }
   }, [commits.length, getLog, sessionId])
 
-  // Dynamic graph column width based on max DAG lane
-  const graphColWidth = useMemo(() => Math.max(48, (maxLane + 1) * 16 + 8), [maxLane])
+  // Dynamic graph column width and DAG topology model
+  const dagGraph = useMemo(() => computeDagGraph(filteredCommits), [filteredCommits])
+  const graphColWidth = dagGraph.graphWidth
 
   if (!status || !status.isRepo) {
     return (
@@ -937,11 +813,79 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
                 </div>
 
                 {/* Rows List */}
-                <div className={css.treeContainer}>
+                <div className={css.treeContainer} style={{ position: 'relative' }}>
+                  {/* Global Continuous SVG Graph Layer (IntelliJ IDEA Grade) */}
+                  <svg
+                    className={css.graphOverlaySvg}
+                    style={{
+                      width: `${graphColWidth}px`,
+                      height: `${filteredCommits.length * 28}px`,
+                    }}
+                  >
+                    {/* Continuous Edges (Trunk & Branch Bezier Rails) */}
+                    {dagGraph.edges.map(e => (
+                      <path
+                        key={e.key}
+                        d={e.d}
+                        stroke={e.color}
+                        strokeWidth={2}
+                        fill="none"
+                        strokeLinecap="round"
+                      />
+                    ))}
+
+                    {/* Nodes (Centered on (x, y)) */}
+                    {dagGraph.nodes.map((n) => {
+                      const isHighlighted = highlightedCommitHash === n.hash
+                      return (
+                        <g key={n.hash}>
+                          {isHighlighted && (
+                            <circle
+                              cx={n.x}
+                              cy={n.y}
+                              r={8.5}
+                              className={css.locateGlowRing}
+                            />
+                          )}
+
+                          {n.hasTag && (
+                            <circle
+                              cx={n.x}
+                              cy={n.y}
+                              r={6.5}
+                              stroke="#f0883e"
+                              strokeWidth={1.5}
+                              fill="none"
+                              opacity={0.9}
+                            />
+                          )}
+
+                          {n.isHead && !n.hasTag && (
+                            <circle
+                              cx={n.x}
+                              cy={n.y}
+                              r={6.5}
+                              stroke={n.color}
+                              strokeWidth={1.5}
+                              fill="none"
+                              opacity={0.8}
+                            />
+                          )}
+
+                          <circle
+                            cx={n.x}
+                            cy={n.y}
+                            r={4}
+                            fill={n.color}
+                          />
+                        </g>
+                      )
+                    })}
+                  </svg>
+
                   {filteredCommits.map((c) => {
                     const isSelected = selectedCommitHash === c.hash
                     const isHighlighted = highlightedCommitHash === c.hash
-                    const hasTag = c.refs?.some(r => r.startsWith('tag: ') || r.includes('tag:'))
                     const parsed = parseConventionalCommit(c.subject)
                     const avatar = getAuthorAvatar(c.author)
 
@@ -956,13 +900,8 @@ export const GitBody = memo(function GitBody(props: GitBodyProps) {
                         ].filter(Boolean).join(' ')}
                         onClick={() => { void handleSelectCommit(c.hash) }}
                       >
-                        {/* Col 1: DAG SVG Track Rails */}
-                        <CommitGraphCell
-                          commit={c}
-                          maxLane={maxLane}
-                          isHighlighted={isHighlighted}
-                          hasTag={Boolean(hasTag)}
-                        />
+                        {/* Col 1: Empty Graph Column Spacer */}
+                        <div style={{ width: `${graphColWidth}px`, height: 28, flexShrink: 0 }} />
 
                         {/* Col 2: Subject & Ref Badges & Conventional Commits */}
                         <div className={css.subjectCol}>
