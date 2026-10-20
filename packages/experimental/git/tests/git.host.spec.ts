@@ -134,11 +134,31 @@ describe('git host plugin', () => {
     expect(statusResult.value.isRepo).toBe(true)
     expect(statusResult.value.branch).toBe('master')
 
-    // Test RPC log
-    const logResult = (await rpcHandler!('log', { maxCount: 5 }, new AbortController().signal, {})) as { ok: boolean; value: Array<{ subject: string }> }
+    // Test RPC log with DAG topology
+    const logResult = (await rpcHandler!('log', { maxCount: 5 }, new AbortController().signal, {})) as {
+      ok: boolean
+      value: Array<{ subject: string; lane: number; paths: unknown[] }>
+    }
     expect(logResult.ok).toBe(true)
     expect(logResult.value.length).toBe(1)
     expect(logResult.value[0]?.subject).toBe('docs: init readme')
+    expect(logResult.value[0]?.lane).toBe(0)
+    expect(Array.isArray(logResult.value[0]?.paths)).toBe(true)
+
+    // Test RPC checkout new branch
+    const checkoutResult = (await rpcHandler!('checkout', { branch: 'feat/test-branch', create: true }, new AbortController().signal, {})) as {
+      ok: boolean
+      value: { success: boolean; message?: string }
+    }
+    expect(checkoutResult.ok).toBe(true)
+    expect(checkoutResult.value.success).toBe(true)
+
+    // Check status reflects new branch
+    const branchStatus = (await rpcHandler!('status', {}, new AbortController().signal, {})) as {
+      ok: boolean
+      value: { branch: string }
+    }
+    expect(branchStatus.value.branch).toBe('feat/test-branch')
 
     await ctx.fiber.dispose()
   })

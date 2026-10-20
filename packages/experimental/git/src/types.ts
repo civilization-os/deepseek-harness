@@ -62,7 +62,7 @@ export interface GitStatusSummary {
   readonly totalChanges: number
 }
 
-/** One commit log entry */
+/** One commit log entry with optional DAG topology metadata */
 export interface GitCommitItem {
   /** Full 40-character commit hash */
   readonly hash: string
@@ -78,6 +78,56 @@ export interface GitCommitItem {
   readonly date: string
   /** Commit subject/first line of commit message */
   readonly subject: string
+  /** Parent commit hashes */
+  readonly parents?: readonly string[]
+  /** Git branch / tag reference names */
+  readonly refs?: readonly string[]
+  /** Topological vertical lane column index (0-based) */
+  readonly lane?: number
+  /** Color hex code for the current commit's lane */
+  readonly laneColor?: string
+  /** Connecting graph rails to parent commits */
+  readonly paths?: readonly GitGraphLanePath[]
+}
+
+/** Vector path connecting lanes in the DAG graph visualization */
+export interface GitGraphLanePath {
+  /** Starting lane index (from this commit) */
+  readonly fromLane: number
+  /** Target lane index (to parent commit or pass-through) */
+  readonly toLane: number
+  /** Type of track: pass-through, fork out, or merge in */
+  readonly kind: 'straight' | 'fork' | 'merge'
+  /** Color of this track line */
+  readonly color: string
+}
+
+/** Detail information for a single commit including changed files */
+export interface GitCommitDetail {
+  readonly commit: GitCommitItem
+  readonly files: readonly {
+    readonly path: string
+    readonly oldPath?: string
+    readonly status: GitFileStatusCode
+    readonly additions: number
+    readonly deletions: number
+  }[]
+  readonly totalAdditions: number
+  readonly totalDeletions: number
+}
+
+/** Aggregated local and remote branches */
+export interface GitBranchesSummary {
+  readonly current?: string
+  readonly local: readonly GitBranchInfo[]
+  readonly remote: readonly GitBranchInfo[]
+}
+
+/** Generic result of executing a git mutative operation */
+export interface GitOperationResult {
+  readonly success: boolean
+  readonly message?: string
+  readonly output?: string
 }
 
 /** One file's diff result */

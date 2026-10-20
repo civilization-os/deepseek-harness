@@ -8,7 +8,21 @@ import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { getGitBranches, getGitDiff, getGitLog, getGitStatus } from './git-executor.ts'
+import {
+  getGitAllBranches,
+  getGitCommitDetails,
+  getGitDiff,
+  getGitLog,
+  getGitStatus,
+  gitCheckout,
+  gitCommit,
+  gitDiscard,
+  gitFetch,
+  gitPull,
+  gitPush,
+  gitStage,
+  gitUnstage,
+} from './git-executor.ts'
 import { registerGitTool } from './tool.ts'
 
 export type * from './types.ts'
@@ -49,9 +63,15 @@ export function apply(ctx: Context): void {
         }
 
         if (endpoint === 'log') {
-          const maxCount = typeof body.maxCount === 'number' ? body.maxCount : 30
+          const maxCount = typeof body.maxCount === 'number' ? body.maxCount : 50
           const commits = await getGitLog(cwd, maxCount)
           return { ok: true, value: commits }
+        }
+
+        if (endpoint === 'commitDetails') {
+          const commit = typeof body.commit === 'string' ? body.commit : ''
+          const details = await getGitCommitDetails(cwd, commit)
+          return { ok: true, value: details }
         }
 
         if (endpoint === 'diff') {
@@ -67,9 +87,72 @@ export function apply(ctx: Context): void {
         }
 
         if (endpoint === 'branches') {
-          const branches = await getGitBranches(cwd)
+          const branches = await getGitAllBranches(cwd)
           return { ok: true, value: branches }
         }
+
+        if (endpoint === 'checkout') {
+          const branch = typeof body.branch === 'string' ? body.branch : ''
+          const createNew = typeof body.create === 'boolean' ? body.create : false
+          const result = await gitCheckout(cwd, branch, createNew)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'stage') {
+          const paths = Array.isArray(body.paths)
+            ? (body.paths as string[])
+            : body.paths === 'all'
+              ? 'all'
+              : typeof body.path === 'string'
+                ? [body.path]
+                : 'all'
+          const result = await gitStage(cwd, paths)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'unstage') {
+          const paths = Array.isArray(body.paths)
+            ? (body.paths as string[])
+            : body.paths === 'all'
+              ? 'all'
+              : typeof body.path === 'string'
+                ? [body.path]
+                : 'all'
+          const result = await gitUnstage(cwd, paths)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'discard') {
+          const paths = Array.isArray(body.paths)
+            ? (body.paths as string[])
+            : typeof body.path === 'string'
+              ? [body.path]
+              : []
+          const result = await gitDiscard(cwd, paths)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'commit') {
+          const message = typeof body.message === 'string' ? body.message : ''
+          const result = await gitCommit(cwd, message)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'fetch') {
+          const result = await gitFetch(cwd)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'pull') {
+          const result = await gitPull(cwd)
+          return { ok: true, value: result }
+        }
+
+        if (endpoint === 'push') {
+          const result = await gitPush(cwd)
+          return { ok: true, value: result }
+        }
+
 
         return {
           ok: false,
@@ -91,6 +174,7 @@ export function apply(ctx: Context): void {
       }
     },
   )
+
 
   // Register the agent tool
   registerGitTool(ctx, resolveTargetDir)

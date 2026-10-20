@@ -6,16 +6,20 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {
+  GitBranchesSummary,
+  GitCommitDetail,
   GitCommitItem,
   GitDiffSummary,
   GitStatusSummary,
 } from '../types.ts'
 import { GIT_ID, gitDefinition } from './definition.tsx'
 import { GitBody, type GitInjected } from './GitBody.tsx'
+import { GitBranchPill } from './GitBranchPill.tsx'
 import { GitTitle } from './GitTitle.tsx'
 import { en, NS, zh } from './locales.ts'
 import type {} from './locales.ts'
@@ -84,13 +88,74 @@ export function apply(ctx: ClientContext): void {
       if (!res.ok) throw new Error(res.error.message)
       return res.value as readonly GitCommitItem[]
     },
+    getCommitDetails: async (sessionId, commit) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'commitDetails', { sessionId, commit })
+      if (!res.ok) throw new Error(res.error.message)
+      return res.value as GitCommitDetail | undefined
+    },
     getDiff: async (sessionId, options) => {
       const conn = getConnection()
       const res = await conn.rpc.call('/git', 'diff', { sessionId, ...options })
       if (!res.ok) throw new Error(res.error.message)
       return res.value as GitDiffSummary
     },
+    getBranches: async (sessionId) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'branches', { sessionId })
+      if (!res.ok) throw new Error(res.error.message)
+      return res.value as GitBranchesSummary
+    },
+    checkout: async (sessionId, branch, create) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'checkout', { sessionId, branch, create })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    stage: async (sessionId, paths) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'stage', { sessionId, paths })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    unstage: async (sessionId, paths) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'unstage', { sessionId, paths })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    discard: async (sessionId, paths) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'discard', { sessionId, paths })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    commit: async (sessionId, message) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'commit', { sessionId, message })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    fetch: async (sessionId) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'fetch', { sessionId })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    pull: async (sessionId) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'pull', { sessionId })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
+    push: async (sessionId) => {
+      const conn = getConnection()
+      const res = await conn.rpc.call('/git', 'push', { sessionId })
+      if (!res.ok) return { success: false, message: res.error.message }
+      return res.value as { success: boolean; message?: string }
+    },
   }
+
 
   // Register slot implementations
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
@@ -110,4 +175,16 @@ export function apply(ctx: ClientContext): void {
     },
     GitTitle,
   )), 'experimental-git: tab title')
+
+  // Register Git Branch Pill in conversation composer dock (status bar at bottom)
+  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register(
+    {
+      name: 'conversation.composer.dock',
+      id: 'git-branch',
+      order: -1,
+      locale: NS,
+      inject: () => actions,
+    },
+    GitBranchPill,
+  ))
 }

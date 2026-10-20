@@ -1,24 +1,38 @@
 /**
- * Interactive Git right-sidebar viewer component.
- * Allows developers to view working tree changes, inspect diffs, and browse commit history.
+ * IntelliJ IDEA-Grade Git Tool Window Component.
+ * Supports DAG commit topology graph visualization, working tree staging, commit console,
+ * branch switcher, and unified diff inspector.
  */
 
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import type { KeyboardEvent, ReactElement } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
+  GitBranchesSummary,
+  GitCommitDetail,
   GitCommitItem,
   GitDiffSummary,
-  GitFileStatus,
   GitStatusSummary,
 } from '../types.ts'
 import type {} from './locales.ts'
 import css from './GitBody.module.css'
 
+
 /** Injected Git RPC methods */
 export interface GitInjected {
   readonly getStatus: (sessionId?: string) => Promise<GitStatusSummary>
   readonly getLog: (sessionId?: string, maxCount?: number) => Promise<readonly GitCommitItem[]>
+  readonly getCommitDetails: (sessionId?: string, commit?: string) => Promise<GitCommitDetail | undefined>
   readonly getDiff: (sessionId?: string, options?: { filePath?: string; staged?: boolean; commit?: string }) => Promise<GitDiffSummary>
+  readonly getBranches: (sessionId?: string) => Promise<GitBranchesSummary>
+  readonly checkout: (sessionId?: string, branch?: string, create?: boolean) => Promise<{ success: boolean; message?: string }>
+  readonly stage: (sessionId?: string, paths?: string[] | 'all') => Promise<{ success: boolean; message?: string }>
+  readonly unstage: (sessionId?: string, paths?: string[] | 'all') => Promise<{ success: boolean; message?: string }>
+  readonly discard: (sessionId?: string, paths?: string[]) => Promise<{ success: boolean; message?: string }>
+  readonly commit: (sessionId?: string, message?: string) => Promise<{ success: boolean; message?: string }>
+  readonly fetch: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
+  readonly pull: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
+  readonly push: (sessionId?: string) => Promise<{ success: boolean; message?: string }>
 }
 
 export type GitBodyProps =
@@ -26,28 +40,25 @@ export type GitBodyProps =
   & PropsLocale<'gitView'>
   & GitInjected
 
+type ActiveTab = 'changes' | 'tree' | 'branches'
+
 /**
- * Render color-coded unified diff text lines.
- * @param props - Raw diff text.
- * @returns Formatted React element.
+ * Render color-coded unified diff lines.
  */
 function DiffViewer({ diffText }: { readonly diffText: string }): ReactElement {
   if (!diffText.trim()) {
-    return <div className={css.diffLoading}>No diff changes</div>
+    return <div className={css.diffViewer}>无代码内容变动</div>
   }
 
   const lines = diffText.split('\n')
   return (
-    <div className={css.diffPreview}>
+    <div className={css.diffViewer}>
       {lines.map((line, idx) => {
         let lineClass = css.diffLine
-        if (line.startsWith('+') && !line.startsWith('+++')) {
-          lineClass = `${css.diffLine} ${css.diffLineAdd}`
-        } else if (line.startsWith('-') && !line.startsWith('---')) {
-          lineClass = `${css.diffLine} ${css.diffLineDel}`
-        } else if (line.startsWith('@@')) {
-          lineClass = `${css.diffLine} ${css.diffLineHeader}`
-        }
+        if (line.startsWith('+') && !line.startsWith('+++')) lineClass = `${css.diffLine} ${css.diffAdd}`
+        else if (line.startsWith('-') && !line.startsWith('---')) lineClass = `${css.diffLine} ${css.diffDel}`
+        else if (line.startsWith('@@')) lineClass = `${css.diffLine} ${css.diffHunk}`
+
         return (
           <div key={idx} className={lineClass}>
             {line || ' '}
@@ -59,184 +70,368 @@ function DiffViewer({ diffText }: { readonly diffText: string }): ReactElement {
 }
 
 /**
- * Main Git right-sidebar tab body.
- * @param props - Slot props including RPC actions and locale translator.
- * @returns Tab content JSX element.
+ * Render SVG DAG topology graph tracks for a single commit row (IDEA style).
  */
-export function GitBody(props: GitBodyProps): ReactElement {
-  const { t, getStatus, getLog, getDiff } = props
+function CommitGraphCell({ commit, maxLane }: { commit: GitCommitItem; maxLane: number }) {
+  const laneWidth = 16
+  const rowHeight = 28
+  const width = Math.max(24, (maxLane + 1) * laneWidth)
+  const myLane = commit.lane ?? 0
+  const nodeX = myLane * laneWidth + 8
+  const nodeY = rowHeight / 2
+  const color = commit.laneColor ?? '#388bfd'
+  const isHead = commit.refs?.some(r => r.includes('HEAD') || r.includes('master') || r.includes('main'))
 
-  const [activeTab, setActiveTab] = useState<'changes' | 'history'>('changes')
+  return (
+    <svg className={css.graphSvg} width={width} height={rowHeight}>
+      {/* 1. Connecting rails */}
+      {commit.paths?.map((p, idx) => {
+        const fromX = p.fromLane * laneWidth + 8
+        const toX = p.toLane * laneWidth + 8
+
+        if (p.kind === 'straight') {
+          return (
+            <line
+              key={idx}
+              x1={fromX}
+              y1={0}
+              x2={toX}
+              y2={rowHeight}
+              stroke={p.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+            />
+          )
+        }
+
+        if (p.kind === 'fork') {
+          return (
+            <path
+              key={idx}
+              d={`M ${fromX} ${nodeY} C ${fromX} 24, ${toX} 18, ${toX} ${rowHeight}`}
+              stroke={p.color}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+            />
+          )
+        }
+
+        if (p.kind === 'merge') {
+          return (
+            <path
+              key={idx}
+              d={`M ${fromX} 0 C ${fromX} 10, ${toX} 4, ${toX} ${nodeY}`}
+              stroke={p.color}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+            />
+          )
+        }
+
+        return null
+      })}
+
+      {/* 2. Commit Node Circle */}
+      {isHead && (
+        <circle
+          cx={nodeX}
+          cy={nodeY}
+          r={6.5}
+          stroke={color}
+          strokeWidth={1.5}
+          fill="none"
+          opacity={0.8}
+        />
+      )}
+      <circle
+        cx={nodeX}
+        cy={nodeY}
+        r={4}
+        fill={color}
+      />
+    </svg>
+  )
+}
+
+/**
+ * Main Git Body Component.
+ */
+export const GitBody = memo(function GitBody(props: GitBodyProps) {
+  const {
+    t,
+    sessionId,
+    getStatus,
+    getLog,
+    getCommitDetails,
+    getDiff,
+    getBranches,
+    checkout,
+    stage,
+    unstage,
+    discard,
+    commit,
+    fetch: fetchGit,
+    pull,
+    push,
+  } = props
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>('changes')
   const [loading, setLoading] = useState(false)
+
   const [status, setStatus] = useState<GitStatusSummary | null>(null)
   const [commits, setCommits] = useState<readonly GitCommitItem[]>([])
-  const [expandedFile, setExpandedFile] = useState<string | null>(null)
-  const [fileDiffs, setFileDiffs] = useState<Record<string, string>>({})
-  const [loadingDiff, setLoadingDiff] = useState(false)
-  const [expandedCommit, setExpandedCommit] = useState<string | null>(null)
-  const [commitDiffs, setCommitDiffs] = useState<Record<string, string>>({})
+  const [branches, setBranches] = useState<GitBranchesSummary | null>(null)
 
-  // Fetch status and commits
+  // Commit Console State
+  const [commitMessage, setCommitMessage] = useState('')
+  const [committing, setCommitting] = useState(false)
+
+  // Diff Preview State
+  const [selectedFileDiff, setSelectedFileDiff] = useState<{ path: string; staged: boolean; diff: string } | null>(null)
+
+  // Tree Selected Commit State
+  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null)
+  const [commitDetail, setCommitDetail] = useState<GitCommitDetail | null>(null)
+
+  // Branch Filter State
+  const [branchFilter, setBranchFilter] = useState('')
+  const [newBranchName, setNewBranchName] = useState('')
+  const [creatingBranch, setCreatingBranch] = useState(false)
+
+  // Fetch full repository data
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const currentStatus = await getStatus()
-      setStatus(currentStatus)
-      if (currentStatus.isRepo) {
-        const commitHistory = await getLog(undefined, 30)
-        setCommits(commitHistory)
-      }
-    } catch {
-      // Graceful fallback
+      const [statusRes, logRes, branchRes] = await Promise.all([
+        getStatus(sessionId).catch(() => null),
+        getLog(sessionId, 50).catch(() => []),
+        getBranches(sessionId).catch(() => null),
+      ])
+      if (statusRes) setStatus(statusRes)
+      if (logRes) setCommits(logRes)
+      if (branchRes) setBranches(branchRes)
     } finally {
       setLoading(false)
     }
-  }, [getStatus, getLog])
+  }, [getBranches, getLog, getStatus, sessionId])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  // Toggle diff expansion for a file
-  const toggleFileDiff = async (file: GitFileStatus) => {
-    const key = `${file.staged ? 'staged:' : 'unstaged:'}${file.path}`
-    if (expandedFile === key) {
-      setExpandedFile(null)
+  // Inspect commit details when a tree node is clicked
+  const handleSelectCommit = useCallback(async (hash: string) => {
+    if (selectedCommitHash === hash) {
+      setSelectedCommitHash(null)
+      setCommitDetail(null)
+      return
+    }
+    setSelectedCommitHash(hash)
+    try {
+      const details = await getCommitDetails(sessionId, hash)
+      setCommitDetail(details ?? null)
+    } catch {
+      setCommitDetail(null)
+    }
+  }, [getCommitDetails, selectedCommitHash, sessionId])
+
+  // Inspect file diff
+  const handleViewDiff = useCallback(async (path: string, staged: boolean, commitHash?: string) => {
+    try {
+      const res = await getDiff(sessionId, {
+        filePath: path,
+        staged,
+        ...commitHash !== undefined ? { commit: commitHash } : {},
+      })
+      setSelectedFileDiff({
+        path,
+        staged,
+        diff: res.rawDiff,
+      })
+    } catch {
+      setSelectedFileDiff(null)
+    }
+  }, [getDiff, sessionId])
+
+  // Stage / Unstage / Discard
+  const handleStage = useCallback(async (paths: string[] | 'all') => {
+    await stage(sessionId, paths)
+    await refresh()
+  }, [refresh, sessionId, stage])
+
+  const handleUnstage = useCallback(async (paths: string[] | 'all') => {
+    await unstage(sessionId, paths)
+    await refresh()
+  }, [refresh, sessionId, unstage])
+
+  const handleDiscard = useCallback(async (paths: string[]) => {
+    if (confirm(`确认放弃对 ${paths.length} 个文件的所有更改吗？此操作无法撤销。`)) {
+      await discard(sessionId, paths)
+      await refresh()
+    }
+  }, [discard, refresh, sessionId])
+
+  // Commit
+  const handleCommit = useCallback(async (andPush = false) => {
+    const trimmed = commitMessage.trim()
+    if (!trimmed) {
+      alert(t('commit.emptyWarning'))
       return
     }
 
-    setExpandedFile(key)
-    if (!fileDiffs[key]) {
-      setLoadingDiff(true)
-      try {
-        const diff = await getDiff(undefined, {
-          filePath: file.path,
-          staged: file.staged,
-        })
-        setFileDiffs(prev => ({ ...prev, [key]: diff.rawDiff }))
-      } catch {
-        setFileDiffs(prev => ({ ...prev, [key]: 'Error loading diff.' }))
-      } finally {
-        setLoadingDiff(false)
+    setCommitting(true)
+    try {
+      const res = await commit(sessionId, trimmed)
+      if (res.success) {
+        setCommitMessage('')
+        if (andPush) {
+          await push(sessionId)
+        }
+        await refresh()
+      } else {
+        alert(res.message || '提交失败')
+      }
+    } finally {
+      setCommitting(false)
+    }
+  }, [commit, commitMessage, push, refresh, sessionId, t])
+
+  const handleCommitKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault()
+      void handleCommit(false)
+    }
+  }, [handleCommit])
+
+  // Branch Switch
+  const handleCheckoutBranch = useCallback(async (bName: string, create = false) => {
+    const res = await checkout(sessionId, bName, create)
+    if (res.success) {
+      setCreatingBranch(false)
+      setNewBranchName('')
+      await refresh()
+    } else {
+      alert(res.message || '检出失败')
+    }
+  }, [checkout, refresh, sessionId])
+
+  // Compute maximum DAG lane for graph width
+  const maxLane = useMemo(() => {
+    let max = 0
+    for (const c of commits) {
+      if (c.lane !== undefined && c.lane > max) max = c.lane
+      if (c.paths) {
+        for (const p of c.paths) {
+          if (p.fromLane > max) max = p.fromLane
+          if (p.toLane > max) max = p.toLane
+        }
       }
     }
-  }
+    return max
+  }, [commits])
 
-  // Toggle diff expansion for a commit
-  const toggleCommitDiff = async (hash: string) => {
-    if (expandedCommit === hash) {
-      setExpandedCommit(null)
-      return
-    }
+  // Filtered branches for branch tab
+  const filteredLocalBranches = useMemo(() => {
+    if (!branches?.local) return []
+    const q = branchFilter.trim().toLowerCase()
+    return q ? branches.local.filter(b => b.name.toLowerCase().includes(q)) : branches.local
+  }, [branches?.local, branchFilter])
 
-    setExpandedCommit(hash)
-    if (!commitDiffs[hash]) {
-      try {
-        const diff = await getDiff(undefined, { commit: hash })
-        setCommitDiffs(prev => ({ ...prev, [hash]: diff.rawDiff }))
-      } catch {
-        setCommitDiffs(prev => ({ ...prev, [hash]: 'Error loading commit diff.' }))
-      }
-    }
-  }
+  const filteredRemoteBranches = useMemo(() => {
+    if (!branches?.remote) return []
+    const q = branchFilter.trim().toLowerCase()
+    return q ? branches.remote.filter(b => b.name.toLowerCase().includes(q)) : branches.remote
+  }, [branches?.remote, branchFilter])
 
-  // Render a list of files with their status badge and collapsible diff
-  const renderFileList = (files: readonly GitFileStatus[], isStaged = false) => {
+  if (!status || !status.isRepo) {
     return (
-      <div className={css.fileList}>
-        {files.map((file) => {
-          const key = `${isStaged ? 'staged:' : 'unstaged:'}${file.path}`
-          const isExpanded = expandedFile === key
-
-          let badgeClass = css.statusModified
-          let badgeLetter = 'M'
-          if (file.status === 'added') {
-            badgeClass = css.statusAdded
-            badgeLetter = 'A'
-          } else if (file.status === 'deleted') {
-            badgeClass = css.statusDeleted
-            badgeLetter = 'D'
-          } else if (file.status === 'untracked') {
-            badgeClass = css.statusUntracked
-            badgeLetter = 'U'
-          }
-
-          const lastSlash = file.path.lastIndexOf('/')
-          const fileName = lastSlash !== -1 ? file.path.slice(lastSlash + 1) : file.path
-          const dirPath = lastSlash !== -1 ? file.path.slice(0, lastSlash) : ''
-
-          return (
-            <div key={key} className={`${css.fileItem} ${isExpanded ? css.selected : ''}`}>
-              <div
-                className={css.fileRow}
-                onClick={() => void toggleFileDiff(file)}
-                title={`${file.path} (${file.status})`}
-              >
-                <div className={css.fileMain}>
-                  <span className={`${css.statusBadge} ${badgeClass}`}>{badgeLetter}</span>
-                  <span className={css.filePath}>
-                    <span className={css.fileName}>{fileName}</span>
-                    {dirPath && <span className={css.fileDir}>{dirPath}</span>}
-                  </span>
-                </div>
-              </div>
-              {isExpanded && (
-                loadingDiff && !fileDiffs[key]
-                  ? <div className={css.diffLoading}>Loading diff...</div>
-                  : <DiffViewer diffText={fileDiffs[key] ?? ''} />
-              )}
-            </div>
-          )
-        })}
+      <div className={css.root}>
+        <div className={css.emptyState}>
+          <svg viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5v-9zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8V1.5z" />
+          </svg>
+          <div>{t('status.notRepo')}</div>
+        </div>
       </div>
     )
   }
 
-  const isRepo = status?.isRepo ?? false
-  const totalChanges = status?.totalChanges ?? 0
+  const stagedCount = status.staged.length
+  const unstagedCount = status.unstaged.length
+  const untrackedCount = status.untracked.length
+  const totalChanges = status.totalChanges
 
   return (
     <div className={css.root}>
-      {/* Header bar */}
+      {/* 1. Header Banner */}
       <div className={css.header}>
         <div className={css.branchInfo}>
-          {isRepo ? (
-            <span className={css.branchBadge} title={status?.branch}>
-              <svg className={css.branchIcon} width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM3.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0z" />
-              </svg>
-              {status?.branch ?? 'HEAD'}
-            </span>
-          ) : (
-            <span className={css.branchBadge}>Not a Git Repo</span>
-          )}
-          {status && status.ahead > 0 && (
-            <span className={css.tabCount} title={`Ahead by ${status.ahead}`}>↑{status.ahead}</span>
-          )}
-          {status && status.behind > 0 && (
-            <span className={css.tabCount} title={`Behind by ${status.behind}`}>↓{status.behind}</span>
+          <span className={css.branchBadge} title={`当前分支: ${status.branch}`}>
+            <svg className={css.branchIcon} width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.75 2.5a1.75 1.75 0 1 0-2.45 1.606V6.5a1.5 1.5 0 0 1-1.5 1.5H5.8A2.75 2.75 0 0 0 3.5 6.25V4.106a1.75 1.75 0 1 0-1.5 0v7.788a1.75 1.75 0 1 0 1.5 0V8.25A1.25 1.25 0 0 1 4.75 7h3a3 3 0 0 0 3-3V4.106a1.75 1.75 0 0 0 1-1.606z" />
+            </svg>
+            {status.branch || 'HEAD'}
+          </span>
+          {(status.ahead > 0 || status.behind > 0) && (
+            <div className={css.statusAheadBehind}>
+              {status.ahead > 0 && <span className={css.aheadText}>↑{status.ahead}</span>}
+              {status.behind > 0 && <span className={css.behindText}>↓{status.behind}</span>}
+            </div>
           )}
         </div>
 
         <div className={css.headerActions}>
           <button
             type="button"
-            className={`${css.iconButton} ${loading ? css.spinning : ''}`}
-            onClick={() => void refresh()}
-            title={t('actions.refresh')}
+            className={css.iconButton}
+            title={t('actions.fetch')}
+            onClick={() => { void fetchGit(sessionId).then(() => refresh()) }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M1.705 8.001a6.3 6.3 0 0 1 10.37-4.807l-1.077 1.076a.5.5 0 0 0 .354.854h3.5a.5.5 0 0 0 .5-.5V1.124a.5.5 0 0 0-.854-.353l-1.128 1.127A7.3 7.3 0 1 0 8 15.3a7.27 7.27 0 0 0 6.136-3.327.5.5 0 1 0-.85-.526A6.27 6.27 0 0 1 8 14.3a6.3 6.3 0 0 1-6.295-6.299z" />
+              <path d="M1.75 3a.75.75 0 0 0 0 1.5h8.5a3.25 3.25 0 0 1 3.25 3.25v2.44l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.72 1.72V7.75A1.75 1.75 0 0 0 10.25 6H1.75a.75.75 0 0 0 0-1.5z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={css.iconButton}
+            title="拉取 (Pull)"
+            onClick={() => { void pull(sessionId).then(() => refresh()) }}
+          >
+
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M13.03 8.22a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 0 1 1.06-1.06L7.5 11.69V2.75a.75.75 0 0 1 1.5 0v8.94l3.47-3.47a.75.75 0 0 1 1.06 0z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={css.iconButton}
+            title="推送 (Push)"
+            onClick={() => { void push(sessionId).then(() => refresh()) }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2.97 7.78a.75.75 0 0 1 0-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 1 1-1.06 1.06L8.5 4.31v8.94a.75.75 0 0 1-1.5 0V4.31L3.53 7.78a.75.75 0 0 1-1.06 0z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`${css.iconButton} ${loading ? css.spinning : ''}`}
+            title="刷新"
+            onClick={refresh}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .655-.835zm12.59-1.01a.75.75 0 0 1-.834-.656 5.5 5.5 0 0 0-9.592-2.97l1.204 1.204a.25.25 0 0 1-.177.427H1.25a.25.25 0 0 1-.25-.25V1.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-.655.835z" />
             </svg>
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className={css.tabBar}>
+      {/* 2. Tabs Bar */}
+      <div className={css.tabs}>
         <button
           type="button"
-          className={`${css.tabItem} ${activeTab === 'changes' ? css.active : ''}`}
+          className={`${css.tab} ${activeTab === 'changes' ? css.tabActive : ''}`}
           onClick={() => { setActiveTab('changes') }}
         >
           {t('tabs.changes')}
@@ -244,101 +439,448 @@ export function GitBody(props: GitBodyProps): ReactElement {
         </button>
         <button
           type="button"
-          className={`${css.tabItem} ${activeTab === 'history' ? css.active : ''}`}
-          onClick={() => { setActiveTab('history') }}
+          className={`${css.tab} ${activeTab === 'tree' ? css.tabActive : ''}`}
+          onClick={() => { setActiveTab('tree') }}
         >
-          {t('tabs.history')}
-          {commits.length > 0 && <span className={css.tabCount}>{commits.length}</span>}
+          {t('tabs.tree')}
+          <span className={css.tabCount}>{commits.length}</span>
+        </button>
+        <button
+          type="button"
+          className={`${css.tab} ${activeTab === 'branches' ? css.tabActive : ''}`}
+          onClick={() => { setActiveTab('branches') }}
+        >
+          {t('tabs.branches')}
         </button>
       </div>
 
-      {/* Body content */}
-      <div className={css.body}>
-        {!isRepo ? (
-          <div className={css.emptyState}>
-            <svg className={css.emptyIcon} width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
-              <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z" />
-            </svg>
-            <div className={css.emptyText}>{t('status.notRepo')}</div>
-          </div>
-        ) : activeTab === 'changes' ? (
-          totalChanges === 0 ? (
-            <div className={css.emptyState}>
-              <svg className={css.emptyIcon} width="36" height="36" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-              </svg>
-              <div className={css.emptyText}>{t('status.clean')}</div>
+      {/* 3. Main Content Panes */}
+      <div className={css.content}>
+        {/* TAB 1: Local Changes */}
+        {activeTab === 'changes' && (
+          <>
+            {totalChanges === 0 ? (
+              <div className={css.emptyState}>
+                <svg viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
+                </svg>
+                <div>{t('status.clean')}</div>
+              </div>
+            ) : (
+              <>
+                {/* 1.1 Staged Changes */}
+                {stagedCount > 0 && (
+                  <div className={css.section}>
+                    <div className={css.sectionHeader}>
+                      <div className={css.sectionTitle}>
+                        <span className={`${css.statusBadge} ${css.statusA}`}>✓</span>
+                        <span>{t('status.staged')} ({stagedCount})</span>
+                      </div>
+                      <div className={css.sectionActions}>
+                        <button
+                          type="button"
+                          className={css.actionTextBtn}
+                          title={t('actions.unstageAll')}
+                          onClick={() => { void handleUnstage('all') }}
+                        >
+                          全部取消暂存
+                        </button>
+                      </div>
+                    </div>
+                    <div className={css.fileList}>
+                      {status.staged.map(f => (
+                        <div
+                          key={`staged-${f.path}`}
+                          className={css.fileItem}
+                          onClick={() => { void handleViewDiff(f.path, true) }}
+                        >
+                          <div className={css.fileLeft}>
+                            <span className={`${css.statusBadge} ${css.statusA}`}>
+                              {f.status[0]?.toUpperCase() ?? 'M'}
+                            </span>
+                            <span className={css.fileName}>{f.path}</span>
+                          </div>
+                          <div className={css.fileItemActions}>
+                            <button
+                              type="button"
+                              className={css.fileMiniBtn}
+                              title={t('actions.unstage')}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleUnstage([f.path])
+                              }}
+                            >
+                              -
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1.2 Unstaged Changes */}
+                {unstagedCount > 0 && (
+                  <div className={css.section}>
+                    <div className={css.sectionHeader}>
+                      <div className={css.sectionTitle}>
+                        <span className={`${css.statusBadge} ${css.statusM}`}>M</span>
+                        <span>{t('status.unstaged')} ({unstagedCount})</span>
+                      </div>
+                      <div className={css.sectionActions}>
+                        <button
+                          type="button"
+                          className={css.actionTextBtn}
+                          title={t('actions.stageAll')}
+                          onClick={() => { void handleStage('all') }}
+                        >
+                          全部暂存
+                        </button>
+                      </div>
+                    </div>
+                    <div className={css.fileList}>
+                      {status.unstaged.map(f => (
+                        <div
+                          key={`unstaged-${f.path}`}
+                          className={css.fileItem}
+                          onClick={() => { void handleViewDiff(f.path, false) }}
+                        >
+                          <div className={css.fileLeft}>
+                            <span className={`${css.statusBadge} ${css.statusM}`}>
+                              {f.status[0]?.toUpperCase() ?? 'M'}
+                            </span>
+                            <span className={css.fileName}>{f.path}</span>
+                          </div>
+                          <div className={css.fileItemActions}>
+                            <button
+                              type="button"
+                              className={css.fileMiniBtn}
+                              title={t('actions.stage')}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleStage([f.path])
+                              }}
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              className={css.fileMiniBtn}
+                              title={t('actions.discard')}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleDiscard([f.path])
+                              }}
+                            >
+                              ↺
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1.3 Untracked Files */}
+                {untrackedCount > 0 && (
+                  <div className={css.section}>
+                    <div className={css.sectionHeader}>
+                      <div className={css.sectionTitle}>
+                        <span className={`${css.statusBadge} ${css.statusU}`}>?</span>
+                        <span>{t('status.untracked')} ({untrackedCount})</span>
+                      </div>
+                    </div>
+                    <div className={css.fileList}>
+                      {status.untracked.map(f => (
+                        <div
+                          key={`untracked-${f.path}`}
+                          className={css.fileItem}
+                          onClick={() => { void handleViewDiff(f.path, false) }}
+                        >
+                          <div className={css.fileLeft}>
+                            <span className={`${css.statusBadge} ${css.statusU}`}>?</span>
+                            <span className={css.fileName}>{f.path}</span>
+                          </div>
+                          <div className={css.fileItemActions}>
+                            <button
+                              type="button"
+                              className={css.fileMiniBtn}
+                              title={t('actions.stage')}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleStage([f.path])
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1.4 Commit Console (IDEA Style) */}
+                <div className={css.commitBox}>
+                  <textarea
+                    className={css.commitTextarea}
+                    placeholder={t('commit.placeholder')}
+                    value={commitMessage}
+                    onChange={(e) => { setCommitMessage(e.target.value) }}
+                    onKeyDown={handleCommitKeyDown}
+                  />
+                  <div className={css.commitButtonRow}>
+                    <button
+                      type="button"
+                      className={css.commitPushBtn}
+                      disabled={committing || stagedCount === 0}
+                      onClick={() => { void handleCommit(true) }}
+                    >
+                      {t('actions.commitAndPush')}
+                    </button>
+                    <button
+                      type="button"
+                      className={css.commitBtn}
+                      disabled={committing || stagedCount === 0}
+                      onClick={() => { void handleCommit(false) }}
+                    >
+                      {t('actions.commit')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Active File Diff Inspector */}
+            {selectedFileDiff && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600 }}>差异对比: {selectedFileDiff.path}</span>
+                  <button
+                    type="button"
+                    className={css.actionTextBtn}
+                    onClick={() => { setSelectedFileDiff(null) }}
+                  >
+                    关闭
+                  </button>
+                </div>
+                <DiffViewer diffText={selectedFileDiff.diff} />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* TAB 2: DAG Topology Tree & Log */}
+        {activeTab === 'tree' && (
+          <>
+            <div className={css.treeContainer}>
+              {commits.map((c) => {
+                const isSelected = selectedCommitHash === c.hash
+                return (
+                  <div
+                    key={c.hash}
+                    className={`${css.treeRow} ${isSelected ? css.treeRowSelected : ''}`}
+                    onClick={() => { void handleSelectCommit(c.hash) }}
+                  >
+                    {/* DAG SVG Track Rails */}
+                    <CommitGraphCell commit={c} maxLane={maxLane} />
+
+                    {/* Commit Content */}
+                    <div className={css.treeBody}>
+                      {c.refs?.map((ref, idx) => {
+                        let refClass = css.refBranch
+                        if (ref.includes('HEAD')) refClass = css.refHead
+                        else if (ref.includes('origin/')) refClass = css.refRemote
+                        return (
+                          <span key={idx} className={`${css.refBadge} ${refClass}`}>
+                            {ref}
+                          </span>
+                        )
+                      })}
+                      <span className={css.treeSubject} title={c.subject}>
+                        {c.subject}
+                      </span>
+                      <span className={css.treeAuthor} title={c.author}>
+                        {c.author}
+                      </span>
+                      <span className={css.treeTime}>
+                        {c.relativeDate}
+                      </span>
+                      <span className={css.treeHash} title={c.hash}>
+                        {c.shortHash}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ) : (
-            <>
-              {/* Staged Changes */}
-              {status && status.staged.length > 0 && (
-                <div className={css.section}>
-                  <div className={css.sectionHeader}>
-                    <span className={css.sectionTitle}>
-                      {t('status.staged')} ({status.staged.length})
-                    </span>
-                  </div>
-                  {renderFileList(status.staged, true)}
-                </div>
-              )}
 
-              {/* Unstaged Changes */}
-              {status && status.unstaged.length > 0 && (
-                <div className={css.section}>
-                  <div className={css.sectionHeader}>
-                    <span className={css.sectionTitle}>
-                      {t('status.unstaged')} ({status.unstaged.length})
+            {/* Commit Detail & Changed Files Panel */}
+            {commitDetail && (
+              <div className={css.commitDetailPanel}>
+                <div className={css.detailHeader}>
+                  <div className={css.detailSubject}>{commitDetail.commit.subject}</div>
+                  <div className={css.detailMetaRow}>
+                    <span>作者: {commitDetail.commit.author} ({commitDetail.commit.authorEmail})</span>
+                    <span>{commitDetail.commit.relativeDate}</span>
+                  </div>
+                  <div className={css.detailMetaRow}>
+                    <span style={{ fontFamily: 'monospace' }}>SHA: {commitDetail.commit.hash}</span>
+                    <span className={css.numstat}>
+                      <span className={css.addStat}>+{commitDetail.totalAdditions}</span>
+                      <span className={css.delStat}>-{commitDetail.totalDeletions}</span>
                     </span>
                   </div>
-                  {renderFileList(status.unstaged, false)}
                 </div>
-              )}
 
-              {/* Untracked Files */}
-              {status && status.untracked.length > 0 && (
-                <div className={css.section}>
-                  <div className={css.sectionHeader}>
-                    <span className={css.sectionTitle}>
-                      {t('status.untracked')} ({status.untracked.length})
-                    </span>
-                  </div>
-                  {renderFileList(status.untracked, false)}
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff' }}>
+                  变更文件 ({commitDetail.files.length})
                 </div>
-              )}
-            </>
-          )
-        ) : (
-          /* History View */
-          <div className={css.commitList}>
-            {commits.map((commit) => {
-              const isExpanded = expandedCommit === commit.hash
-              return (
-                <div
-                  key={commit.hash}
-                  className={css.commitItem}
-                  onClick={() => void toggleCommitDiff(commit.hash)}
+
+                <div className={css.detailFilesList}>
+                  {commitDetail.files.map(f => (
+                    <div
+                      key={f.path}
+                      className={css.detailFileItem}
+                      onClick={() => { void handleViewDiff(f.path, false, commitDetail.commit.hash) }}
+                    >
+                      <div className={css.fileLeft}>
+                        <span className={`${css.statusBadge} ${f.status === 'added' ? css.statusA : f.status === 'deleted' ? css.statusD : css.statusM}`}>
+                          {f.status[0]?.toUpperCase() ?? 'M'}
+                        </span>
+                        <span className={css.fileName}>{f.path}</span>
+                      </div>
+                      <span className={css.numstat}>
+                        <span className={css.addStat}>+{f.additions}</span>
+                        <span className={css.delStat}>-{f.deletions}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {selectedFileDiff && (
+                  <div style={{ marginTop: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600 }}>文件差异: {selectedFileDiff.path}</span>
+                      <button
+                        type="button"
+                        className={css.actionTextBtn}
+                        onClick={() => { setSelectedFileDiff(null) }}
+                      >
+                        关闭
+                      </button>
+                    </div>
+                    <DiffViewer diffText={selectedFileDiff.diff} />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* TAB 3: Branches */}
+        {activeTab === 'branches' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Search and New Branch bar */}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                className={css.commitTextarea}
+                style={{ minHeight: '30px', height: '30px', padding: '4px 8px' }}
+                placeholder={t('branch.filter')}
+                value={branchFilter}
+                onChange={(e) => { setBranchFilter(e.target.value) }}
+              />
+              <button
+                type="button"
+                className={css.actionTextBtn}
+                style={{ flexShrink: 0 }}
+                onClick={() => { setCreatingBranch(prev => !prev) }}
+              >
+                + 新建分支
+              </button>
+            </div>
+
+            {creatingBranch && (
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  autoFocus
+                  className={css.commitTextarea}
+                  style={{ minHeight: '30px', height: '30px', padding: '4px 8px' }}
+                  placeholder="新分支名称..."
+                  value={newBranchName}
+                  onChange={(e) => { setNewBranchName(e.target.value) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const trimmed = newBranchName.trim()
+                      if (trimmed) void handleCheckoutBranch(trimmed, true)
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={css.commitBtn}
+                  onClick={() => {
+                    const trimmed = newBranchName.trim()
+                    if (trimmed) void handleCheckoutBranch(trimmed, true)
+                  }}
                 >
-                  <div className={css.commitHeader}>
-                    <div className={css.commitSubject}>{commit.subject}</div>
-                    <span className={css.commitHash}>{commit.shortHash}</span>
+                  创建并检出
+                </button>
+              </div>
+            )}
+
+            {/* Local Branches */}
+            <div className={css.section}>
+              <div className={css.sectionHeader}>
+                <span>本地分支 ({filteredLocalBranches.length})</span>
+              </div>
+              <div className={css.fileList}>
+                {filteredLocalBranches.map(b => (
+                  <div
+                    key={b.name}
+                    className={css.fileItem}
+                    style={{ background: b.isCurrent ? 'rgba(56, 139, 253, 0.15)' : undefined }}
+                    onClick={() => {
+                      if (!b.isCurrent) void handleCheckoutBranch(b.name)
+                    }}
+                  >
+                    <div className={css.fileLeft}>
+                      <span style={{ color: b.isCurrent ? '#388bfd' : 'inherit' }}>
+                        {b.isCurrent ? '●' : '○'}
+                      </span>
+                      <span style={{ fontWeight: b.isCurrent ? 600 : 400 }}>{b.name}</span>
+                    </div>
+                    {b.isCurrent && <span style={{ fontSize: '11px', color: '#58a6ff' }}>当前检出</span>}
                   </div>
-                  <div className={css.commitMeta}>
-                    <span>{commit.author}</span>
-                    <span>{commit.relativeDate}</span>
-                  </div>
-                  {isExpanded && (
-                    commitDiffs[commit.hash]
-                      ? <DiffViewer diffText={commitDiffs[commit.hash] ?? ''} />
-                      : <div className={css.diffLoading}>Loading commit diff...</div>
-                  )}
+                ))}
+              </div>
+            </div>
+
+            {/* Remote Branches */}
+            {filteredRemoteBranches.length > 0 && (
+              <div className={css.section}>
+                <div className={css.sectionHeader}>
+                  <span>远程分支 ({filteredRemoteBranches.length})</span>
                 </div>
-              )
-            })}
+                <div className={css.fileList}>
+                  {filteredRemoteBranches.map(b => (
+                    <div
+                      key={b.name}
+                      className={css.fileItem}
+                      onClick={() => { void handleCheckoutBranch(b.name) }}
+                    >
+                      <div className={css.fileLeft}>
+                        <span style={{ opacity: 0.6 }}>☁</span>
+                        <span>{b.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   )
-}
+})

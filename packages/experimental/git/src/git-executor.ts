@@ -1,25 +1,36 @@
-/**
- * Safe, robust git command executor and porcelain output parsers.
- */
-
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type {
   GitBranchInfo,
+  GitBranchesSummary,
+  GitCommitDetail,
   GitCommitItem,
   GitDiffFile,
   GitDiffSummary,
   GitFileStatus,
   GitFileStatusCode,
+  GitGraphLanePath,
+  GitOperationResult,
   GitStatusSummary,
 } from './types.ts'
 
 const execFileAsync = promisify(execFile)
 
 /** Timeout in milliseconds for git operations */
-const GIT_TIMEOUT_MS = 10_000
-/** Maximum stdout buffer for git diff / log output (4MB) */
-const GIT_MAX_BUFFER = 4 * 1024 * 1024
+const GIT_TIMEOUT_MS = 15_000
+/** Maximum stdout buffer for git diff / log output (8MB) */
+const GIT_MAX_BUFFER = 8 * 1024 * 1024
+
+/** Vibrant IDEA-grade color palette for DAG branches */
+const LANE_PALETTE: readonly string[] = [
+  '#388bfd', // Blue
+  '#2ea043', // Green
+  '#f0883e', // Orange
+  '#a371f7', // Purple
+  '#db61a2', // Rose
+  '#39c5bb', // Cyan
+  '#f9c513', // Amber
+]
 
 /**
  * Execute a git command in the target directory safely.
@@ -39,6 +50,32 @@ export async function runGit(cwd: string, args: readonly string[]): Promise<stri
     return stdout.trim()
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Detailed execution result returning stdout, stderr, and success code.
+ * @param cwd - Working directory.
+ * @param args - Arguments.
+ * @returns Standard execution details.
+ */
+export async function runGitDetailed(cwd: string, args: readonly string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  try {
+    const { stdout, stderr } = await execFileAsync('git', args as string[], {
+      cwd,
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: GIT_MAX_BUFFER,
+      windowsHide: true,
+      encoding: 'utf8',
+    })
+    return { ok: true, stdout: stdout.trim(), stderr: stderr.trim() }
+  } catch (err: unknown) {
+    const error = err as { stdout?: string; stderr?: string; message?: string }
+    return {
+      ok: false,
+      stdout: (error.stdout ?? '').trim(),
+      stderr: (error.stderr || error.message || String(err)).trim(),
+    }
   }
 }
 
@@ -229,12 +266,158 @@ export async function getGitStatus(cwd: string): Promise<GitStatusSummary> {
 }
 
 /**
- * Query recent git commit history for the given directory.
- * @param cwd - Target directory.
- * @param maxCount - Maximum number of commits to retrieve (defaults to 30).
- * @returns Ordered list of recent commits.
+ * Parse refs from git %D format (e.g. "HEAD -> master, origin/master, tag: v0.1").
+ * @param refStr - Raw refs string.
+ * @returns Normalized list of clean ref names.
  */
-export async function getGitLog(cwd: string, maxCount = 30): Promise<readonly GitCommitItem[]> {
+function parseCommitRefs(refStr: string): string[] {
+  if (!refStr.trim()) return []
+  const parts = refStr.split(',')
+  const refs: string[] = []
+  for (const part of parts) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    if (trimmed.startsWith('HEAD -> ')) {
+      refs.push(trimmed.slice(8))
+    } else {
+      refs.push(trimmed)
+    }
+  }
+  return refs
+}
+
+/**
+ * Compute DAG topology lanes and vector paths for commits (IntelliJ IDEA style graph).
+ * @param rawCommits - Chronological descending commits with parents.
+ * @returns Commits augmented with lane indices, lane colors, and connecting paths.
+ */
+function buildDagTopology(rawCommits: {
+  hash: string
+  shortHash: string
+  author: string
+  authorEmail: string
+  relativeDate: string
+  date: string
+  subject: string
+  parents: string[]
+  refs: string[]
+}[]): GitCommitItem[] {
+  const activeLanes: (string | null)[] = []
+  const result: GitCommitItem[] = []
+
+  for (const item of rawCommits) {
+    // 1. Locate current commit lane
+    let lane = activeLanes.indexOf(item.hash)
+    if (lane === -1) {
+      // Find first empty slot or append
+      const emptySlot = activeLanes.indexOf(null)
+      if (emptySlot !== -1) {
+        lane = emptySlot
+      } else {
+        lane = activeLanes.length
+        activeLanes.push(null)
+      }
+    }
+
+    const laneColor = LANE_PALETTE[lane % LANE_PALETTE.length] ?? '#388bfd'
+    // Clear current position
+    activeLanes[lane] = null
+
+    // 2. Map parents to target lanes
+    const paths: GitGraphLanePath[] = []
+    const [firstParent, ...otherParents] = item.parents
+
+    if (firstParent) {
+      // First parent continues on this lane, or merges if already tracked elsewhere
+      const existingParentLane = activeLanes.indexOf(firstParent)
+      if (existingParentLane !== -1) {
+        paths.push({
+          fromLane: lane,
+          toLane: existingParentLane,
+          kind: 'merge',
+          color: laneColor,
+        })
+      } else {
+        activeLanes[lane] = firstParent
+        paths.push({
+          fromLane: lane,
+          toLane: lane,
+          kind: 'straight',
+          color: laneColor,
+        })
+      }
+    }
+
+    // Additional parents (merge commit)
+    for (const otherParent of otherParents) {
+      const existingLane = activeLanes.indexOf(otherParent)
+      if (existingLane !== -1) {
+        paths.push({
+          fromLane: lane,
+          toLane: existingLane,
+          kind: 'merge',
+          color: LANE_PALETTE[existingLane % LANE_PALETTE.length] ?? laneColor,
+        })
+      } else {
+        // Allocate a new lane for this merged-in branch
+        const emptySlot = activeLanes.indexOf(null)
+        const newLane = emptySlot !== -1 ? emptySlot : activeLanes.length
+        if (emptySlot !== -1) activeLanes[emptySlot] = otherParent
+        else activeLanes.push(otherParent)
+
+        const branchColor = LANE_PALETTE[newLane % LANE_PALETTE.length] ?? laneColor
+        paths.push({
+          fromLane: lane,
+          toLane: newLane,
+          kind: 'fork',
+          color: branchColor,
+        })
+      }
+    }
+
+    // Add pass-through straight lines for other active lanes
+    for (let l = 0; l < activeLanes.length; l++) {
+      if (l !== lane && activeLanes[l] !== null) {
+        paths.push({
+          fromLane: l,
+          toLane: l,
+          kind: 'straight',
+          color: LANE_PALETTE[l % LANE_PALETTE.length] ?? '#388bfd',
+        })
+      }
+    }
+
+    // Trim trailing empty lanes
+    while (activeLanes.length > 0 && activeLanes.at(-1) === null) {
+      activeLanes.pop()
+    }
+
+    result.push({
+      hash: item.hash,
+      shortHash: item.shortHash,
+      author: item.author,
+      authorEmail: item.authorEmail,
+      relativeDate: item.relativeDate,
+      date: item.date,
+      subject: item.subject,
+      parents: item.parents,
+      refs: item.refs,
+      lane,
+      laneColor,
+      paths,
+    })
+  }
+
+  return result
+}
+
+/**
+ * Query recent git commit history with DAG graph topology for the given directory.
+ * @param cwd - Target directory.
+ * @param maxCount - Maximum number of commits to retrieve (defaults to 50).
+ * @returns Ordered list of recent commits with topology paths.
+ */
+export async function getGitLog(cwd: string, maxCount = 50): Promise<readonly GitCommitItem[]> {
   const isRepo = await checkIsGitRepo(cwd)
   if (!isRepo) return []
 
@@ -242,17 +425,33 @@ export async function getGitLog(cwd: string, maxCount = 30): Promise<readonly Gi
     'log',
     '-n',
     String(maxCount),
-    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ar%x1f%ad%x1f%s',
+    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ar%x1f%ad%x1f%s%x1f%P%x1f%D',
   ])
   if (!raw) return []
 
-  const commits: GitCommitItem[] = []
+  const rawCommits: {
+    hash: string
+    shortHash: string
+    author: string
+    authorEmail: string
+    relativeDate: string
+    date: string
+    subject: string
+    parents: string[]
+    refs: string[]
+  }[] = []
+
   const lines = raw.split(/\r?\n/)
   for (const line of lines) {
     if (!line) continue
     const parts = line.split('\x1f')
     if (parts.length >= 7 && parts[0] && parts[1] && parts[2] && parts[3] && parts[4] && parts[5] && parts[6] !== undefined) {
-      commits.push({
+      const parentStr = parts[7] ?? ''
+      const parents = parentStr.trim() ? parentStr.trim().split(/\s+/) : []
+      const refStr = parts[8] ?? ''
+      const refs = parseCommitRefs(refStr)
+
+      rawCommits.push({
         hash: parts[0],
         shortHash: parts[1],
         author: parts[2],
@@ -260,10 +459,121 @@ export async function getGitLog(cwd: string, maxCount = 30): Promise<readonly Gi
         relativeDate: parts[4],
         date: parts[5],
         subject: parts[6],
+        parents,
+        refs,
       })
     }
   }
-  return commits
+
+  return buildDagTopology(rawCommits)
+}
+
+/**
+ * Query details and changed files for a specific commit.
+ * @param cwd - Working directory.
+ * @param commitHash - Full or abbreviated commit hash.
+ * @returns Detailed commit information.
+ */
+export async function getGitCommitDetails(cwd: string, commitHash: string): Promise<GitCommitDetail | undefined> {
+  const isRepo = await checkIsGitRepo(cwd)
+  if (!isRepo) return undefined
+
+  // 1. Get commit header metadata
+  const headRaw = await runGit(cwd, [
+    'show',
+    '--no-patch',
+    '--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%ar%x1f%ad%x1f%s%x1f%P%x1f%D',
+    commitHash,
+  ])
+  if (!headRaw) return undefined
+
+  const parts = headRaw.split('\x1f')
+  if (parts.length < 7 || !parts[0] || !parts[1] || !parts[2] || !parts[3] || !parts[4] || !parts[5] || parts[6] === undefined) {
+    return undefined
+  }
+
+  const parentStr = parts[7] ?? ''
+  const parents = parentStr.trim() ? parentStr.trim().split(/\s+/) : []
+  const refStr = parts[8] ?? ''
+  const refs = parseCommitRefs(refStr)
+
+  const commit: GitCommitItem = {
+    hash: parts[0],
+    shortHash: parts[1],
+    author: parts[2],
+    authorEmail: parts[3],
+    relativeDate: parts[4],
+    date: parts[5],
+    subject: parts[6],
+    parents,
+    refs,
+  }
+
+  // 2. Get changed files with numstat
+  const numstatRaw = await runGit(cwd, [
+    'show',
+    '--numstat',
+    '--format=',
+    '-M',
+    commitHash,
+  ])
+
+  const files: {
+    path: string
+    oldPath?: string
+    status: GitFileStatusCode
+    additions: number
+    deletions: number
+  }[] = []
+
+  let totalAdditions = 0
+  let totalDeletions = 0
+
+  if (numstatRaw) {
+    const lines = numstatRaw.split(/\r?\n/)
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const match = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line)
+      if (match && match[1] && match[2] && match[3]) {
+        const adds = match[1] === '-' ? 0 : Number.parseInt(match[1], 10)
+        const dels = match[2] === '-' ? 0 : Number.parseInt(match[2], 10)
+        const rawPath = match[3]
+
+        let path = rawPath
+        let oldPath: string | undefined
+        let status: GitFileStatusCode = 'modified'
+
+        if (rawPath.includes(' => ')) {
+          status = 'renamed'
+          // Formats like "src/{old.ts => new.ts}" or "old.ts => new.ts"
+          const braceMatch = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(rawPath)
+          const hasBraceGroups = braceMatch && braceMatch[1] !== undefined
+            && braceMatch[2] !== undefined && braceMatch[3] !== undefined && braceMatch[4] !== undefined
+          if (hasBraceGroups) {
+            oldPath = `${braceMatch[1]}${braceMatch[2]}${braceMatch[4]}`
+            path = `${braceMatch[1]}${braceMatch[3]}${braceMatch[4]}`
+          } else {
+            const split = rawPath.split(' => ')
+            oldPath = split[0]?.trim()
+            path = split[1]?.trim() ?? rawPath
+          }
+        }
+
+        totalAdditions += adds
+        totalDeletions += dels
+
+        files.push({
+          path,
+          ...oldPath !== undefined ? { oldPath } : {},
+          status,
+          additions: adds,
+          deletions: dels,
+        })
+      }
+    }
+  }
+
+  return { commit, files, totalAdditions, totalDeletions }
 }
 
 /**
@@ -330,26 +640,32 @@ export async function getGitDiff(
 }
 
 /**
- * Query git local branches.
+ * Query local and remote branches.
  * @param cwd - Target directory.
- * @returns List of branch information.
+ * @returns Aggregated branch summary.
  */
-export async function getGitBranches(cwd: string): Promise<readonly GitBranchInfo[]> {
+export async function getGitAllBranches(cwd: string): Promise<GitBranchesSummary> {
   const isRepo = await checkIsGitRepo(cwd)
-  if (!isRepo) return []
+  if (!isRepo) return { local: [], remote: [] }
 
-  const raw = await runGit(cwd, ['branch', '-vv', '--list'])
-  if (!raw) return []
+  const raw = await runGit(cwd, ['branch', '-a', '-vv', '--list'])
+  if (!raw) return { local: [], remote: [] }
 
-  const branches: GitBranchInfo[] = []
+  const local: GitBranchInfo[] = []
+  const remote: GitBranchInfo[] = []
+  let current: string | undefined
+
   const lines = raw.split(/\r?\n/)
-
   for (const line of lines) {
-    if (!line) continue
+    if (!line.trim()) continue
     const isCurrent = line.startsWith('*')
     const cleanLine = line.slice(2).trim()
+
+    // Skip detached HEAD or symbolic pointers like remotes/origin/HEAD -> origin/master
+    if (cleanLine.includes('->')) continue
+
     const spaceIndex = cleanLine.indexOf(' ')
-    const name = spaceIndex !== -1 ? cleanLine.slice(0, spaceIndex) : cleanLine
+    const fullName = spaceIndex !== -1 ? cleanLine.slice(0, spaceIndex) : cleanLine
 
     let upstream: string | undefined
     let ahead: number | undefined
@@ -368,14 +684,171 @@ export async function getGitBranches(cwd: string): Promise<readonly GitBranchInf
       if (behindMatch?.[1]) behind = Number.parseInt(behindMatch[1], 10)
     }
 
-    branches.push({
-      name,
-      isCurrent,
-      ...upstream !== undefined ? { upstream } : {},
-      ...ahead !== undefined ? { ahead } : {},
-      ...behind !== undefined ? { behind } : {},
-    })
+    if (isCurrent) {
+      current = fullName
+    }
+
+    if (fullName.startsWith('remotes/')) {
+      const remoteName = fullName.replace(/^remotes\//, '')
+      remote.push({
+        name: remoteName,
+        isCurrent: false,
+      })
+    } else {
+      local.push({
+        name: fullName,
+        isCurrent,
+        ...upstream !== undefined ? { upstream } : {},
+        ...ahead !== undefined ? { ahead } : {},
+        ...behind !== undefined ? { behind } : {},
+      })
+    }
   }
 
-  return branches
+  return {
+    ...current !== undefined ? { current } : {},
+    local,
+    remote,
+  }
+}
+
+
+/**
+ * Query git local branches (legacy helper).
+ * @param cwd - Target directory.
+ * @returns List of branch information.
+ */
+export async function getGitBranches(cwd: string): Promise<readonly GitBranchInfo[]> {
+  const summary = await getGitAllBranches(cwd)
+  return summary.local
+}
+
+/**
+ * Checkout an existing branch or create a new branch.
+ * @param cwd - Target directory.
+ * @param branch - Branch name to switch to.
+ * @param createNew - Whether to create a new branch (-b).
+ * @returns Operation result.
+ */
+export async function gitCheckout(cwd: string, branch: string, createNew?: boolean): Promise<GitOperationResult> {
+  const cleanBranch = branch.trim()
+  if (!cleanBranch) return { success: false, message: 'Branch name cannot be empty' }
+
+  const args = createNew ? ['checkout', '-b', cleanBranch] : ['checkout', cleanBranch]
+  const res = await runGitDetailed(cwd, args)
+  return {
+    success: res.ok,
+    message: res.ok ? `Checked out branch ${cleanBranch}` : res.stderr || 'Checkout failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Stage files to index.
+ * @param cwd - Target directory.
+ * @param paths - Specific file paths or 'all'.
+ * @returns Operation result.
+ */
+export async function gitStage(cwd: string, paths: readonly string[] | 'all'): Promise<GitOperationResult> {
+  const args = paths === 'all' ? ['add', '-A'] : ['add', '--', ...paths]
+  const res = await runGitDetailed(cwd, args)
+  return {
+    success: res.ok,
+    message: res.ok ? 'Files staged successfully' : res.stderr || 'Stage failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Unstage files from index.
+ * @param cwd - Target directory.
+ * @param paths - Specific file paths or 'all'.
+ * @returns Operation result.
+ */
+export async function gitUnstage(cwd: string, paths: readonly string[] | 'all'): Promise<GitOperationResult> {
+  const args = paths === 'all' ? ['reset', 'HEAD'] : ['reset', 'HEAD', '--', ...paths]
+  const res = await runGitDetailed(cwd, args)
+  return {
+    success: res.ok,
+    message: res.ok ? 'Files unstaged successfully' : res.stderr || 'Unstage failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Discard working tree changes for specified files.
+ * @param cwd - Target directory.
+ * @param paths - Specific file paths to discard.
+ * @returns Operation result.
+ */
+export async function gitDiscard(cwd: string, paths: readonly string[]): Promise<GitOperationResult> {
+  if (paths.length === 0) return { success: true }
+  // 1. Restore tracked changes
+  const resRestore = await runGitDetailed(cwd, ['checkout', '--', ...paths])
+  // 2. Clean untracked files if any
+  await runGitDetailed(cwd, ['clean', '-f', '--', ...paths])
+  return {
+    success: resRestore.ok,
+    message: resRestore.ok ? 'Changes discarded successfully' : resRestore.stderr || 'Discard failed',
+    output: resRestore.stdout || resRestore.stderr,
+  }
+}
+
+/**
+ * Commit staged changes with message.
+ * @param cwd - Target directory.
+ * @param message - Commit message.
+ * @returns Operation result.
+ */
+export async function gitCommit(cwd: string, message: string): Promise<GitOperationResult> {
+  const trimmed = message.trim()
+  if (!trimmed) return { success: false, message: 'Commit message cannot be empty' }
+  const res = await runGitDetailed(cwd, ['commit', '-m', trimmed])
+  return {
+    success: res.ok,
+    message: res.ok ? 'Changes committed successfully' : res.stderr || 'Commit failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Fetch updates from remotes.
+ * @param cwd - Target directory.
+ * @returns Operation result.
+ */
+export async function gitFetch(cwd: string): Promise<GitOperationResult> {
+  const res = await runGitDetailed(cwd, ['fetch', '--all', '--prune'])
+  return {
+    success: res.ok,
+    message: res.ok ? 'Fetched successfully' : res.stderr || 'Fetch failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Pull remote changes into current branch.
+ * @param cwd - Target directory.
+ * @returns Operation result.
+ */
+export async function gitPull(cwd: string): Promise<GitOperationResult> {
+  const res = await runGitDetailed(cwd, ['pull'])
+  return {
+    success: res.ok,
+    message: res.ok ? 'Pulled successfully' : res.stderr || 'Pull failed',
+    output: res.stdout || res.stderr,
+  }
+}
+
+/**
+ * Push local commits to remote upstream.
+ * @param cwd - Target directory.
+ * @returns Operation result.
+ */
+export async function gitPush(cwd: string): Promise<GitOperationResult> {
+  const res = await runGitDetailed(cwd, ['push'])
+  return {
+    success: res.ok,
+    message: res.ok ? 'Pushed successfully' : res.stderr || 'Push failed',
+    output: res.stdout || res.stderr,
+  }
 }
