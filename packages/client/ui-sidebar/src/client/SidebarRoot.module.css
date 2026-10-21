@@ -380,6 +380,8 @@
   display: inline-flex;
   align-items: center;
   height: 10px;
+  max-width: 112px;
+  overflow: hidden;
   padding: 0 3px;
   border-radius: 2px;
   color: var(--dsw-alias-label-primary-inverted);
@@ -388,6 +390,7 @@
   font-size: 6px;
   font-weight: 500;
   line-height: 10px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

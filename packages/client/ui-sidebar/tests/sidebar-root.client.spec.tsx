@@ -136,6 +136,14 @@ describe('SidebarRoot shell', () => {
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
 
+  it('shows the build version beside a custom or official brand wordmark', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '0.2.1-rc.2-civilization.0.0.4')
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '642bfbf')
+    mountShell()
+    expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
+    expect(screen.getByText('0.2.1-rc.2-civilization.0.0.4-642bfbf')).toBeTruthy()
+  })
+
   it('renders generic brand fallbacks when no package fills the slots', () => {
     vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')

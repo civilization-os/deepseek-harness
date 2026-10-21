@@ -97,6 +97,21 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES.length).toBeGreaterThan(0)
   })
 
+  it('declares every client service consumed by the Git bundle', () => {
+    const name = '@civilization/dsh-experimental-git'
+    const manifest = bundles.get(name)?.manifest as (Manifest & { dsh?: { client?: { inject?: string[] } } }) | undefined
+    expect(OPTIONAL_BUNDLES).toContain(name)
+    expect(manifest?.dsh?.client?.inject).toEqual(expect.arrayContaining([
+      '@deepseek-ai/dsh-client-connection',
+      '@deepseek-ai/dsh-client-locale',
+      '@deepseek-ai/dsh-client-ui-sidebar-right',
+      '@deepseek-ai/dsh-client-ui-conversation',
+      '@deepseek-ai/dsh-client-ui-renderer',
+      '@deepseek-ai/dsh-client-ui-slots',
+      '@deepseek-ai/dsh-client-shortcuts',
+    ]))
+  })
+
   it('keeps the Inspector out of the default plugin list', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })

@@ -12,7 +12,7 @@ import type {} from './locales.ts'
 export const GIT_KIND = 'git'
 
 /** Implementation identity in the tab system */
-export const GIT_ID = '@deepseek-ai/dsh-experimental-git'
+export const GIT_ID = '@civilization/dsh-experimental-git'
 
 /** Git artwork for the Sidebar Guide */
 export function GuideArtworkGit(): React.ReactElement {
