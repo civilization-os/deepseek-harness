@@ -273,7 +273,7 @@ importers:
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:*
         version: link:../../packages/util/atomic-write
-      '@deepseek-ai/dsh-base':
+      '@civilization/dsh-base':
         specifier: workspace:*
         version: link:../../packages/bundle/base
       '@deepseek-ai/dsh-client-ui-agent-preset':
@@ -514,7 +514,7 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../packages/core/agent
-      '@deepseek-ai/dsh-agent-loop':
+      '@civilization/dsh-agent-loop':
         specifier: workspace:*
         version: link:../../packages/core/agent-loop
       '@deepseek-ai/dsh-agent-loop-testkit':
