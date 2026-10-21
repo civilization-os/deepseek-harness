@@ -15,8 +15,9 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/webhook-github': '@deepseek-ai/dsh-webhook-github',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
-/** npm namespace for experimental packages without retained-name exceptions. */
+/** npm namespaces for experimental packages without retained-name exceptions. */
 export const EXPERIMENTAL_PACKAGE_NAME_PREFIX = '@deepseek-ai/dsh-experimental-'
+export const FIRST_PARTY_EXPERIMENTAL_PACKAGE_NAME_PREFIX = '@civilization/dsh-experimental-'
 const retainedNames = new Set(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))
 
 /**
@@ -25,7 +26,9 @@ const retainedNames = new Set(Object.values(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS
  * @returns Whether the name uses the experimental prefix or a retained name.
  */
 export function isExperimentalPackageName(name: string): boolean {
-  return name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX) || retainedNames.has(name)
+  return name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX)
+    || name.startsWith(FIRST_PARTY_EXPERIMENTAL_PACKAGE_NAME_PREFIX)
+    || retainedNames.has(name)
 }
 
 /**
@@ -35,7 +38,7 @@ export function isExperimentalPackageName(name: string): boolean {
  */
 export function hasExperimentalPackageReference(reference: string): boolean {
   const normalized = reference.replaceAll('\\', '/')
-  return [...normalized.matchAll(/(?:^|[/:\u0000])(@deepseek-ai\/[^/@?#:\s]+)(?=$|[/@?#:])/g)]
+  return [...normalized.matchAll(/(?:^|[/:\u0000])(@(?:deepseek-ai|civilization)\/[^/@?#:\s]+)(?=$|[/@?#:])/g)]
     .some(([, name]) => name !== undefined && isExperimentalPackageName(name))
 }
 
@@ -46,6 +49,9 @@ export function hasExperimentalPackageReference(reference: string): boolean {
  */
 export function experimentalPackageRecordNamespace(name: string): string | undefined {
   if (!isExperimentalPackageName(name)) return undefined
+  if (name.startsWith(FIRST_PARTY_EXPERIMENTAL_PACKAGE_NAME_PREFIX)) {
+    return name.slice(FIRST_PARTY_EXPERIMENTAL_PACKAGE_NAME_PREFIX.length)
+  }
   return name.slice(name.startsWith(EXPERIMENTAL_PACKAGE_NAME_PREFIX) ? EXPERIMENTAL_PACKAGE_NAME_PREFIX.length : '@deepseek-ai/dsh-'.length)
 }
 

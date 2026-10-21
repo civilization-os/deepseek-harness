@@ -1,3 +1,3 @@
 - insert:
     - id: optional-git
-      name: '@deepseek-ai/dsh-experimental-git'
+      name: '@civilization/dsh-experimental-git'

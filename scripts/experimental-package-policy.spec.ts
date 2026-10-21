@@ -32,6 +32,14 @@ describe('experimental package identities', () => {
     expect(hasExperimentalPackageReference('@deepseek-ai/dsh-core')).toBe(false)
   })
 
+  it('recognizes first-party experimental packages and preserves their record namespace', () => {
+    const name = '@civilization/dsh-experimental-git'
+    expect(isExperimentalPackageName(name)).toBe(true)
+    expect(experimentalPackageRecordNamespace(name)).toBe('git')
+    expect(hasExperimentalPackageReference(`npm:${name}@0.2.1-rc.2`)).toBe(true)
+    expect(hasExperimentalPackageReference(`\\0virtual:${name}/client?raw`)).toBe(true)
+  })
+
   it.each(Object.entries(EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS))('keeps %s record names independent of the retained npm name', (directory, name) => {
     expect(experimentalPackageRecordNamespace(name)).toBe(directory.split('/').at(-1))
   })

@@ -312,7 +312,7 @@ importers:
       '@deepseek-ai/dsh-experimental-cot-translation-bundle':
         specifier: workspace:*
         version: link:../../packages/experimental/cot-translation-bundle
-      '@deepseek-ai/dsh-experimental-git':
+      '@civilization/dsh-experimental-git':
         specifier: workspace:*
         version: link:../../packages/experimental/git
       '@deepseek-ai/dsh-experimental-inspector-profile':

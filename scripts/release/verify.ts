@@ -68,7 +68,10 @@ function verifyTag(family: ReleaseFamily, members: readonly ReleaseMember[], ref
   if (!tag.startsWith(family.tagPrefix)) {
     throw new Error(`tag ${tag} does not belong to release family ${family.id} (expected ${family.tagPrefix}*)`)
   }
-  const expected = members.map(member => family.tagFor(member))
+  const tagMembers = family.id === 'dsh'
+    ? members.filter(member => member.name === '@civilization/dsh')
+    : members
+  const expected = tagMembers.map(member => family.tagFor(member))
   if (!expected.includes(tag)) {
     throw new Error(`tag ${tag} names no version this family carries; its members would tag as:\n${[...new Set(expected)].join('\n')}`)
   }

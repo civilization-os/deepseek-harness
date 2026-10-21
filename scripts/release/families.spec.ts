@@ -32,10 +32,14 @@ afterEach(() => {
 })
 
 describe('release families', () => {
-  it('publishes the dsh CLI application', () => {
+  it('publishes all first-party scoped packages and excludes upstream packages', () => {
     const members = releaseFamily('dsh').members(resolve(import.meta.dirname, '../..'))
 
-    expect(members.map(member => member.name)).toEqual(['@civilization/dsh'])
+    expect(members.map(member => member.name)).toEqual([
+      '@civilization/dsh',
+      '@civilization/dsh-experimental-git',
+    ])
+    expect(members.every(member => member.name.startsWith('@civilization/'))).toBe(true)
   })
 
   it('excludes private applications from the publish set', () => {
@@ -109,12 +113,16 @@ describe('release families', () => {
     expect(vendor.distTagForVersion('4.0.1-canary.1')).toBe('next')
   })
 
-  it('rejects a family whose members disagree on the shared version', () => {
+  it('allows independently versioned first-party packages but requires the CLI release entry', () => {
     const dsh = releaseFamily('dsh')
-    const members = [member('apps/cli', '@deepseek-ai/dsh'), { ...member('apps/web', '@deepseek-ai/dsh-web-frontend'), version: '0.0.2' }]
+    const members = [
+      { ...member('apps/cli', '@civilization/dsh'), version: '0.2.1-rc.2-civilization.0.0.2' },
+      { ...member('packages/experimental/git', '@civilization/dsh-experimental-git'), version: '0.2.1-rc.2' },
+    ]
 
-    expect(() => { dsh.verifyVersions(members) }).toThrow(/must share one version/)
-    expect(() => { dsh.verifyVersions([members[0]!]) }).not.toThrow()
+    expect(() => { dsh.verifyVersions(members) }).not.toThrow()
+    expect(() => { dsh.verifyVersions([members[1]!]) }).toThrow(/include @civilization\\/dsh/)
+    expect(() => { dsh.verifyVersions([{ ...members[1]!, version: 'latest' }, members[0]!]) }).toThrow(/unpublishable version/)
   })
 
   it('accepts independent vendored versions and rejects an unpublishable one', () => {

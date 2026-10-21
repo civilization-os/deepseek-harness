@@ -112,6 +112,13 @@ export abstract class ReleaseFamily {
   verifyBuildArtifacts(_root: string): void {}
 
   /**
+   * Whether a discovered workspace package belongs to this release family.
+   * @param _name - complete npm package name.
+   * @returns Whether the package participates in this release.
+   */
+  protected includePackage(_name: string): boolean { return true }
+
+  /**
    * Discover this family's members.
    * @param root - repository root.
    * @returns Publishable members sorted by directory, with names validated and deduplicated.
@@ -127,6 +134,7 @@ export abstract class ReleaseFamily {
       const manifest = readManifest(resolve(root, manifestPath))
       if (manifest.private === true) continue
       const name = requireString(manifest, 'name', normalized)
+      if (!this.includePackage(name)) continue
       const version = requireString(manifest, 'version', normalized)
       if (name === WORKSPACE_ROOT_PACKAGE) throw new Error(`${normalized} selected the workspace root`)
       if (!name.startsWith('@deepseek-ai/') && !name.startsWith('@civilization/')) {
@@ -346,19 +354,33 @@ export abstract class ReleaseFamily {
 class DshFamily extends ReleaseFamily {
   readonly id = 'dsh'
   readonly patterns = [
-    'apps/cli/package.json',
+    'apps/*/package.json',
+    'packages/*/*/package.json',
+    'vendor/*/package.json',
+    'native/system/package.json',
+    'native/system/packages/*/package.json',
+    'python/*/package.json',
   ] as const
   readonly tagPrefix = 'dsh-v'
 
+  /** Publish only packages owned by this fork; upstream-scoped packages remain upstream dependencies. */
+  protected override includePackage(name: string): boolean {
+    return name.startsWith('@civilization/')
+  }
+
   /**
-   * Require one version across the family, the way a single tag can name it.
+   * First-party packages may have independent versions. The CLI version remains
+   * the release tag's source of truth; every selected package must be publishable.
    * @param members - this family's members.
    */
   verifyVersions(members: readonly ReleaseMember[]): void {
-    const versions = new Set(members.map(member => member.version))
-    if (versions.size !== 1) {
-      const detail = members.map(member => `${member.directory}: ${member.version}`).join('\n')
-      throw new Error(`dsh release members must share one version:\n${detail}`)
+    if (!members.some(member => member.name === '@civilization/dsh')) {
+      throw new Error('dsh release family must include @civilization/dsh as its release entry')
+    }
+    for (const member of members) {
+      if (!/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(member.version)) {
+        throw new Error(`${member.directory} has an unpublishable version: ${member.version}`)
+      }
     }
   }
 
