@@ -2223,7 +2223,7 @@ importers:
       '@deepseek-ai/dsh-agent-instructions':
         specifier: workspace:*
         version: link:../../context/agent-instructions
-      '@deepseek-ai/dsh-agent-loop':
+      '@civilization/dsh-agent-loop':
         specifier: workspace:*
         version: link:../../core/agent-loop
       '@deepseek-ai/dsh-api-gateway':
