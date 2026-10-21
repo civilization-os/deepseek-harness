@@ -378,7 +378,7 @@ class DshFamily extends ReleaseFamily {
       throw new Error('dsh release family must include @civilization/dsh as its release entry')
     }
     for (const member of members) {
-      if (!/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(member.version)) {
+      if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(member.version)) {
         throw new Error(`${member.directory} has an unpublishable version: ${member.version}`)
       }
     }

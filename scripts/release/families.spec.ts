@@ -121,7 +121,7 @@ describe('release families', () => {
     ]
 
     expect(() => { dsh.verifyVersions(members) }).not.toThrow()
-    expect(() => { dsh.verifyVersions([members[1]!]) }).toThrow(/include @civilization\\/dsh/)
+    expect(() => { dsh.verifyVersions([members[1]!]) }).toThrow(/include @civilization\/dsh/)
     expect(() => { dsh.verifyVersions([{ ...members[1]!, version: 'latest' }, members[0]!]) }).toThrow(/unpublishable version/)
   })
 
