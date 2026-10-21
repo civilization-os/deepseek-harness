@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-base",
+  "name": "@civilization/dsh-base",
   "description": "The shared dsh core as a profile bundle: the first patch layer of base-backed profiles, inserting core rows over the empty profile root",
   "version": "0.2.1-rc.3",
   "publishConfig": {
