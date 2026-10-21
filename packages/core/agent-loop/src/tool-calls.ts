@@ -111,6 +111,33 @@ function parseArguments(raw: string): unknown {
 }
 
 /**
+ * Resolve the scheduler even when the process loaded two physical copies of
+ * dsh-tools. Module-local Symbol() keys differ across evaluations, but their
+ * descriptions are stable across that boundary.
+ */
+type ToolRuntimeScheduler = NonNullable<Context['tools'][typeof TOOL_RUNTIME_SCHEDULER]>
+
+function getToolRuntimeScheduler(ctx: Context): ToolRuntimeScheduler {
+  const direct = ctx.tools[TOOL_RUNTIME_SCHEDULER]
+  if (direct !== undefined) return direct
+
+  const key = Object.getOwnPropertySymbols(ctx.tools).find(
+    (candidate) => candidate.description === TOOL_RUNTIME_SCHEDULER.description,
+  )
+  const scheduler = key === undefined
+    ? undefined
+    : (ctx.tools as unknown as Record<symbol, unknown>)[key]
+  if (scheduler !== undefined && typeof scheduler === 'object' && scheduler !== null
+    && 'prepare' in scheduler && 'dispatch' in scheduler && 'finalize' in scheduler && 'finish' in scheduler) {
+    return scheduler as ToolRuntimeScheduler
+  }
+
+  throw new Error(
+    'Tool runtime scheduler is missing. The profile may have loaded incompatible copies of @deepseek-ai/dsh-tools.',
+  )
+}
+
+/**
  * Run one exclusive barrier or parallel pool. Later calls are reclassified
  * before start; an exclusive reclassification waits for the current pool to
  * drain and remains for the caller's next barrier. Results and contexts commit
@@ -128,6 +155,7 @@ async function runGroup(
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
 ): Promise<GroupOutcome> {
+  const scheduler = getToolRuntimeScheduler(ctx)
   const { session } = ctx.agents.requireInitiator()
   const maxParallelToolCalls = ctx.agentLoop.config.maxParallelToolCalls.get()
   const slots: (Slot | undefined)[] = group.map(() => undefined)
@@ -150,8 +178,8 @@ async function runGroup(
       if (slot === undefined) break
       const call = group[committed]
       const result = slot.needsPost
-        ? await ctx.tools[TOOL_RUNTIME_SCHEDULER].finalize(slot.exec, slot.result)
-        : ctx.tools[TOOL_RUNTIME_SCHEDULER].finish(slot.exec, slot.result)
+        ? await scheduler.finalize(slot.exec, slot.result)
+        : scheduler.finish(slot.exec, slot.result)
       // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded index
       appendToolResult(session, turn, step, call!.block, result, callSeqs[committed]!)
       for (const context of result.additionalContexts ?? []) acceptContext(context)
@@ -167,11 +195,11 @@ async function runGroup(
     const call = group[index]!
     callSeqs[index] = appendToolCall(session, turn, step, call.block)
     started++
-    const prepared = await ctx.tools[TOOL_RUNTIME_SCHEDULER].prepare(call.exec)
+    const prepared = await scheduler.prepare(call.exec)
     throwSchedulerFailure()
     switch (prepared.kind) {
       case 'dispatch': {
-        const promise = ctx.tools[TOOL_RUNTIME_SCHEDULER].dispatch(prepared.exec).then(
+        const promise = scheduler.dispatch(prepared.exec).then(
           (outcome) => {
             slots[index] = { exec: prepared.exec, result: outcome.result, needsPost: outcome.kind === 'post-result' }
             return index
