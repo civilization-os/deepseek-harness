@@ -423,7 +423,10 @@ class DshFamily extends ReleaseFamily {
       const dependencies = manifest[section]
       if (dependencies === null || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue
       for (const [name, range] of Object.entries(dependencies)) {
-        if (name !== '@deepseek-ai/dsh' && !name.startsWith('@deepseek-ai/dsh-')) continue
+        // Only packages published by this fork share the release version.
+        // Upstream-scoped @deepseek-ai/dsh-* packages are external dependencies
+        // and can legitimately remain on their upstream version.
+        if (name !== '@civilization/dsh' && !name.startsWith('@civilization/dsh-')) continue
         if (range !== member.version) {
           throw new Error(`${member.name}: packed ${section}.${name} must equal ${member.version}, got ${String(range)}`)
         }

@@ -176,14 +176,26 @@ describe('release families', () => {
   })
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
-    'requires exact packed DSH %s while preserving external ranges', (section) => {
-      const pkg = member('packages/example/provider', '@deepseek-ai/dsh-provider')
+    'requires exact packed first-party DSH %s while preserving upstream ranges', (section) => {
+      const pkg = member('packages/example/provider', '@civilization/dsh-provider')
       const family = releaseFamily('dsh')
-      const manifest = { name: pkg.name, version: pkg.version, [section]: { '@deepseek-ai/dsh-tools': pkg.version, external: '^4.0.0' } }
+      const manifest = {
+        name: pkg.name,
+        version: pkg.version,
+        [section]: {
+          '@civilization/dsh-tools': pkg.version,
+          '@deepseek-ai/dsh-brand': '0.2.1-rc.2',
+          external: '^4.0.0',
+        },
+      }
       expect(() => { family.validatePackedManifest(pkg, manifest) }).not.toThrow()
       for (const range of ['workspace:*', '^0.0.1', '~0.0.1', '0.0.2', '*']) {
-        expect(() => { family.validatePackedManifest(pkg, { ...manifest, [section]: { '@deepseek-ai/dsh-tools': range } }) })
-          .toThrow(`packed ${section}.@deepseek-ai/dsh-tools must equal`)
+        expect(() => {
+          family.validatePackedManifest(pkg, {
+            ...manifest,
+            [section]: { '@civilization/dsh-tools': range, '@deepseek-ai/dsh-brand': '0.2.1-rc.2' },
+          })
+        }).toThrow(`packed ${section}.@civilization/dsh-tools must equal`)
       }
     },
   )
